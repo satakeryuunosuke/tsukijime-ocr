@@ -8,6 +8,5 @@ tools/testdata/
 !public/assets/ROI_coordinate.csv
 !public/assets/product_list.csv
 
-# 機密ファイル（商品単価・学習済みモデル）
-public/assets/product_list.csv
-public/assets/model/
+# ※ モデル(public/assets/model/)と価格表(product_list.csv)は
+#   アプリ動作に必須のため公開・追跡する方針（2026-07-02 決定）。
