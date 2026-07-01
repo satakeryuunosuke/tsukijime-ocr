@@ -34,8 +34,9 @@ export function buildCsv(rows, products) {
 
 // rows: [{ predictions }]（recognizePage / 訂正済みの結果）
 // products: [{ key, name, points }]（product_list.csv 由来。列の順序・日本語名に使用）
+// maxDays: その月の日数。1〜maxDays の日付行を必ず出力する（データが無い日も空欄で行を残す）。
 // 日付ごとに個数を合計した集計CSVを生成（合計点数の列は含まない）。
-export function buildAggregatedCsv(rows, products) {
+export function buildAggregatedCsv(rows, products, maxDays) {
   const header = ["日付", ...products.map((p) => p.name)];
   const sums = new Map(); // day(number) -> { qty: {key: sum} }
 
@@ -50,11 +51,15 @@ export function buildAggregatedCsv(rows, products) {
     for (const p of products) qty[p.key] += qtyOf(predictions, p.key);
   }
 
+  // その月の全日付（1〜maxDays）＋データ側の日付（範囲外の異常値も欠落させない）を合わせて出力。
+  const dayset = new Set(sums.keys());
+  for (let d = 1; d <= (maxDays || 0); d++) dayset.add(d);
+  const days = [...dayset].filter((d) => d >= 1).sort((a, b) => a - b);
+
   const lines = [header.map(csvCell).join(",")];
-  const days = [...sums.keys()].sort((a, b) => a - b);
   for (const day of days) {
     const qty = sums.get(day);
-    const cells = [day || "", ...products.map((p) => qty[p.key] || "")];
+    const cells = [day, ...products.map((p) => (qty ? qty[p.key] || "" : ""))];
     lines.push(cells.map(csvCell).join(","));
   }
   return lines.join("\r\n");

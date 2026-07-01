@@ -221,8 +221,8 @@ function onDownload() {
 function onDownloadAggregated() {
   if (!confirmIfUnchecked()) return;
   const okRows = pages.filter((p) => p.ok).map((p) => ({ predictions: p.predictions }));
-  const csv = buildAggregatedCsv(okRows, ctx.products);
   const ym = $("ymInput").value.trim() || "output";
+  const csv = buildAggregatedCsv(okRows, ctx.products, daysInMonth(ym));
   downloadCsv(csv, `recognition_results_${ym}_daily.csv`);
 }
 
