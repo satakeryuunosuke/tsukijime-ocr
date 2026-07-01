@@ -4,7 +4,7 @@ import { loadConfig, parseRoiCsv } from "./config.js";
 import { initBackend } from "./backend.js";
 import { openPdf, renderPdfPage } from "./pdf.js";
 import { recognizePage } from "./pipeline.js";
-import { buildCsv, downloadCsv } from "./csv.js";
+import { buildCsv, buildAggregatedCsv, downloadCsv } from "./csv.js";
 import { loadProducts } from "./products.js";
 import { validatePage, daysInMonth } from "./validate.js";
 import { openReview } from "./review.js";
@@ -88,6 +88,15 @@ function statusHtml(page) {
   return `<span class="ok">✓ OK</span>`;
 }
 
+// 状態列に「✓ OK」（チェックマーク）が表示される行かどうか。
+function isFullyOk(page) {
+  if (!page.ok) return false;
+  const v = page.valid || {};
+  if (v.checksumOk === false || v.dateOk === false) return false;
+  if (page.lowConfidence && page.lowConfidence.length) return false;
+  return true;
+}
+
 function digitsSummary(predictions) {
   const parts = [];
   for (const [k, v] of Object.entries(predictions || {})) {
@@ -121,6 +130,7 @@ function renderResults() {
     .join("");
 
   $("downloadBtn").disabled = ok.length === 0;
+  $("downloadAggBtn").disabled = ok.length === 0;
   $("results").hidden = pages.length === 0;
 }
 
@@ -192,17 +202,35 @@ $("resultBody").addEventListener("click", (e) => {
   }).then(() => renderResults());
 });
 
+// 未確認（状態が「✓ OK」でない）行がある場合、ダウンロード前に確認を促す。
+function confirmIfUnchecked() {
+  if (pages.every(isFullyOk)) return true;
+  return window.confirm(
+    "チェックマーク（✓ OK）が付いていない読み取り結果があります。このままダウンロードしますか？"
+  );
+}
+
 function onDownload() {
+  if (!confirmIfUnchecked()) return;
   const okRows = pages.filter((p) => p.ok).map((p) => ({ predictions: p.predictions }));
   const csv = buildCsv(okRows, ctx.products);
   const ym = $("ymInput").value.trim() || "output";
   downloadCsv(csv, `recognition_results_${ym}.csv`);
 }
 
+function onDownloadAggregated() {
+  if (!confirmIfUnchecked()) return;
+  const okRows = pages.filter((p) => p.ok).map((p) => ({ predictions: p.predictions }));
+  const csv = buildAggregatedCsv(okRows, ctx.products);
+  const ym = $("ymInput").value.trim() || "output";
+  downloadCsv(csv, `recognition_results_${ym}_daily.csv`);
+}
+
 $("fileInput").addEventListener("change", (e) => {
   if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files));
 });
 $("downloadBtn").addEventListener("click", onDownload);
+$("downloadAggBtn").addEventListener("click", onDownloadAggregated);
 
 const drop = $("dropzone");
 ["dragover", "dragenter"].forEach((ev) =>
