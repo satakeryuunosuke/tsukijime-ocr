@@ -194,7 +194,7 @@ $("resultBody").addEventListener("click", (e) => {
 
 function onDownload() {
   const okRows = pages.filter((p) => p.ok).map((p) => ({ predictions: p.predictions }));
-  const csv = buildCsv(okRows, ctx.roiRows);
+  const csv = buildCsv(okRows, ctx.products);
   const ym = $("ymInput").value.trim() || "output";
   downloadCsv(csv, `recognition_results_${ym}.csv`);
 }

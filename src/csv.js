@@ -1,38 +1,33 @@
-// save_to_csv_B.save_to_csv と同じ列順で CSV を生成する。
-// これによりデスクトップ版の Excel 集計工程（recognition_results_*.csv を消費）へ
-// そのまま受け渡せる（ハイブリッド運用の受け渡し点）。
+// CSV 生成（人が読みやすい形式）。
+// 列: 日付, 連番, <商品ごとに1列（日本語名・値は個数）>, 合計点数
+// ※ デスクトップ版 recognition_results_*.csv（_0/_1 の2列構成）とは非互換。
+import { qtyOf, toInt, computeTotalScore } from "./validate.js";
 
-// 列順: [日付(降順)] + [code_1, code_0] + [その他ROI(CSV順)] + [合計(降順)]
-export function csvColumns(roiRows) {
-  const names = roiRows.map((r) => r.name);
-  const dates = names.filter((n) => n.startsWith("date_")).sort().reverse();   // date_1, date_0
-  const totals = names.filter((n) => n.startsWith("total_")).sort().reverse(); // total_2, total_1
-  const others = names.filter((n) => !n.startsWith("date_") && !n.startsWith("total_"));
-  return [...dates, "code_1", "code_0", ...others, ...totals];
+function csvCell(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-// rows: [{ predictions }]（recognizePage の ok 結果）
-// code_1/code_0 は日付ごとの連番（デスクトップ版の date_counter 相当。処理順で採番）。
-export function buildCsv(rows, roiRows) {
-  const cols = csvColumns(roiRows);
+// rows: [{ predictions }]（recognizePage / 訂正済みの結果）
+// products: [{ key, name, points }]（product_list.csv 由来。列の順序・日本語名に使用）
+export function buildCsv(rows, products) {
+  const header = ["日付", "連番", ...products.map((p) => p.name), "合計点数"];
   const counter = {};
-  const lines = [cols.join(",")];
+  const lines = [header.map(csvCell).join(",")];
 
   for (const { predictions } of rows) {
-    const d1 = predictions.date_1 ?? "";
-    const d0 = predictions.date_0 ?? "";
-    const dateStr = `${d1}${d0}`;
+    const day = toInt(predictions.date_1) * 10 + toInt(predictions.date_0);
+    const dateStr = `${predictions.date_1 ?? ""}${predictions.date_0 ?? ""}`;
     const seq = (counter[dateStr] || 0) + 1;
     counter[dateStr] = seq;
 
-    const row = { ...predictions, code_1: Math.floor(seq / 10), code_0: seq % 10 };
-    const line = cols
-      .map((c) => {
-        const v = row[c];
-        return v === undefined || v === null ? "" : String(v);
-      })
-      .join(",");
-    lines.push(line);
+    const cells = [
+      day || "",
+      seq,
+      ...products.map((p) => qtyOf(predictions, p.key) || ""),
+      computeTotalScore(predictions, products) || "",
+    ];
+    lines.push(cells.map(csvCell).join(","));
   }
   return lines.join("\r\n");
 }

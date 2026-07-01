@@ -26,7 +26,7 @@ from predictor_C import segment_digits_internal, predict_numbers_from_extracted_
 
 # NEO_tool_2.load_config と同じ挙動（nested config は無視されデフォルトが効く点も含め再現）
 def load_marker_params():
-    default_params = {"block_size": 11, "c_value": 2, "closing_iter": 2, "min_area": 300, "solidity_thr": 0.8}
+    default_params = {"block_size": 11, "c_value": 2, "closing_iter": 2, "min_area": 300, "solidity_thr": 0.85}
     try:
         with open(constants.CONFIG_JSON_PATH, encoding="utf-8") as f:
             default_params.update(json.load(f))

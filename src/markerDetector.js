@@ -9,7 +9,7 @@ export const MARKER_PARAMS = {
   c_value: 2,
   closing_iter: 2,
   min_area: 300,
-  solidity_thr: 0.8,
+  solidity_thr: 0.85,
   max_area: 15000,
 };
 

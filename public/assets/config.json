@@ -5,7 +5,7 @@
     "c_value": 2,
     "closing_iter": 2,
     "min_area": 500,
-    "solidity_thr": 0.8
+    "solidity_thr": 0.85
   },
   "digit_recognition": {
     "description": "数字認識の前処理・フィルター閾値",
