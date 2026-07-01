@@ -51,39 +51,53 @@ function isRectangle(pts, tol = 15.0) {
   return angles.every((a) => Math.abs(a - 90.0) <= tol);
 }
 
-export function detectMarkers(srcMat, params = MARKER_PARAMS) {
-  const cv = window.cv;
+// BlockSize は奇数・3以上（adaptiveThreshold の要件）
+function normBlockSize(bs) {
+  bs = Math.max(3, Math.round(bs));
+  return bs % 2 === 0 ? bs + 1 : bs;
+}
 
+// 前処理（グレースケール→ブラー→適応二値化→クロージング）。返り値の thresh は呼び出し側で delete。
+export function markerThreshold(srcMat, params = MARKER_PARAMS) {
+  const cv = window.cv;
   const gray = new cv.Mat();
   cv.cvtColor(srcMat, gray, cv.COLOR_RGBA2GRAY);
   const blurred = new cv.Mat();
   cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
   gray.delete();
-
   const thresh = new cv.Mat();
   cv.adaptiveThreshold(
     blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-    cv.THRESH_BINARY_INV, params.block_size, params.c_value);
+    cv.THRESH_BINARY_INV, normBlockSize(params.block_size), params.c_value);
   blurred.delete();
+  if (params.closing_iter > 0) {
+    const kernel = cv.Mat.ones(3, 3, cv.CV_8U);
+    cv.morphologyEx(thresh, thresh, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), params.closing_iter);
+    kernel.delete();
+  }
+  return thresh;
+}
 
-  const kernel = cv.Mat.ones(3, 3, cv.CV_8U);
-  cv.morphologyEx(thresh, thresh, cv.MORPH_CLOSE, kernel,
-    new cv.Point(-1, -1), params.closing_iter);
-  kernel.delete();
-
+// 指定パラメータで「マーカー候補」を検出する（パラメータ調整UI用）。
+// 返り値: { centers: [[x,y]...], hulls: [[[x,y]...]...] }（個数チェック・長方形判定は行わない）
+export function detectMarkerCandidates(srcMat, params = MARKER_PARAMS) {
+  const cv = window.cv;
+  const thresh = markerThreshold(srcMat, params);
   const contours = new cv.MatVector();
   const hier = new cv.Mat();
   cv.findContours(thresh, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
   hier.delete();
   thresh.delete();
 
+  const maxArea = params.max_area ?? MARKER_PARAMS.max_area;
   const centers = [];
+  const hulls = [];
   for (let i = 0; i < contours.size(); i++) {
     const cnt = contours.get(i);
     const hull = new cv.Mat();
     cv.convexHull(cnt, hull, false, true);
     const area = cv.contourArea(hull, false);
-    if (area < params.min_area || area > params.max_area) {
+    if (area < params.min_area || area > maxArea) {
       hull.delete(); cnt.delete(); continue;
     }
     const peri = cv.arcLength(hull, true);
@@ -97,15 +111,23 @@ export function detectMarkers(srcMat, params = MARKER_PARAMS) {
         const M = cv.moments(hull, false);
         if (M.m00 !== 0) {
           centers.push([Math.trunc(M.m10 / M.m00), Math.trunc(M.m01 / M.m00)]);
+          const pts = [];
+          for (let k = 0; k < hull.rows; k++) pts.push([hull.data32S[k * 2], hull.data32S[k * 2 + 1]]);
+          hulls.push(pts);
         }
       }
     }
     approx.delete(); hull.delete(); cnt.delete();
   }
   contours.delete();
+  return { centers, hulls };
+}
 
+// 自動検出：候補がちょうど4つ かつ 長方形配置のとき [左上,右上,右下,左下] を返す。失敗時 null。
+export function detectMarkers(srcMat, params = MARKER_PARAMS) {
+  const { centers } = detectMarkerCandidates(srcMat, params);
   if (centers.length !== 4) return null;
   const ordered = orderPoints(centers);
   if (!isRectangle(ordered)) return null;
-  return ordered; // [[x,y] x4]  TL,TR,BR,BL
+  return ordered;
 }

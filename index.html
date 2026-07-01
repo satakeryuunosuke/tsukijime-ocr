@@ -54,8 +54,8 @@
   <script src="public/assets/vendor/pdf.min.js"></script>
   <script type="module" src="src/main.js"></script>
   <script>
-    // Service Worker 登録（オフライン動作の有効化）
-    if ("serviceWorker" in navigator) {
+    // Service Worker 登録（オフライン動作の有効化）。?nosw で無効化（開発用）。
+    if ("serviceWorker" in navigator && !location.search.includes("nosw")) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW登録失敗:", e));
       });

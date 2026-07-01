@@ -153,7 +153,8 @@ async function processAll() {
     setStatus(`認識中… ${i + 1} / ${total} ページ`);
     if (i % 2 === 0 || i === total - 1) {
       renderResults();
-      await new Promise((r) => requestAnimationFrame(r));
+      // UIへyield（requestAnimationFrame はタブ非表示時に発火しないため setTimeout を使う）
+      await new Promise((r) => setTimeout(r, 0));
     }
   }
   renderResults();

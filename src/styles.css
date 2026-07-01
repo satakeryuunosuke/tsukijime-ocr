@@ -107,6 +107,20 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .rv-corner-canvas { border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; touch-action: manipulation; }
 .rv-corner-status { text-align: center; color: var(--muted); font-size: .85rem; }
 
+/* パラメータ調整モード */
+.rv-tuner { display: flex; gap: 1.25rem; flex-wrap: wrap; margin: .5rem 0; }
+.rv-previews { flex: 1 1 380px; min-width: 280px; display: flex; gap: .6rem; flex-wrap: wrap; }
+.rv-previews figure { margin: 0; flex: 1 1 45%; min-width: 150px; text-align: center; }
+.rv-previews canvas { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.rv-previews figcaption { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+.rv-sliders { flex: 1 1 260px; min-width: 240px; }
+.rv-srow { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .3rem .6rem; margin-bottom: .55rem; }
+.rv-srow label { grid-column: 1 / -1; font-size: .8rem; font-weight: 600; color: #334155; }
+.rv-srow input[type="range"] { width: 100%; }
+.rv-sval { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--primary-d); min-width: 3ch; text-align: right; }
+.rv-count { text-align: center; font-size: 1.15rem; font-weight: 700; margin: .5rem 0; }
+.rv-guide { font-size: .78rem; color: var(--muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .7rem; }
+
 .rv-edit { display: flex; gap: 1.25rem; flex-wrap: wrap; }
 .rv-img { flex: 1 1 380px; min-width: 300px; }
 .rv-disp { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; }

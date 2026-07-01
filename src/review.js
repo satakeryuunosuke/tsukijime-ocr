@@ -1,7 +1,7 @@
 // 訂正・検算・手動フォールバックのモーダルUI。
 // - マーカー検出成功ページ: 台形補正画像＋認識値を表示し、個数/日付/合計欄を編集。検算をライブ表示。
 // - マーカー検出失敗ページ: 生画像上で四隅を4点タップ→台形補正→認識→編集へ。
-import { orderPoints } from "./markerDetector.js";
+import { orderPoints, detectMarkers, detectMarkerCandidates, markerThreshold, MARKER_PARAMS } from "./markerDetector.js";
 import { transformImage } from "./geometry.js";
 import { extractRois, deleteRois } from "./extractor.js";
 import { predictNumbers } from "./predictor.js";
@@ -32,13 +32,15 @@ export function openReview(page, ctx) {
 
     const rawCanvas = await ctx.renderRaw(page);
 
+    // coords が決まったら認識→編集へ（ok は保存時に確定）
+    const onCoords = async (coords) => {
+      page.coords = coords;
+      await recognizeWithCoords(page, rawCanvas, ctx);
+      editMode(body, page, rawCanvas, ctx, close);
+    };
     if (!page.coords) {
-      cornerMode(body, rawCanvas, ctx, async (coords) => {
-        page.coords = coords;
-        await recognizeWithCoords(page, rawCanvas, ctx);
-        // ok は保存時に確定（編集をキャンセルしたら未確定のまま）
-        editMode(body, page, rawCanvas, ctx, close);
-      });
+      // マーカー検出失敗: まずパラメータ調整で自動検出を試す（手動タップにも切替可）
+      paramMode(body, rawCanvas, ctx, onCoords);
     } else {
       editMode(body, page, rawCanvas, ctx, close);
     }
@@ -58,6 +60,110 @@ async function recognizeWithCoords(page, rawCanvas, ctx) {
     .map((k) => k.replace("_low_confidence_flag", ""));
   deleteRois(rois);
   tMat.delete();
+}
+
+// ---- パラメータ調整モード（setup_marker_detector_B.MarkerTunerApp 相当） ----
+function paramMode(body, rawCanvas, ctx, onDone) {
+  const cv = window.cv;
+  const SLIDERS = [
+    { key: "block_size", label: "BlockSize（奇数）", min: 3, max: 51, step: 2, val: MARKER_PARAMS.block_size },
+    { key: "c_value", label: "C_Value", min: 0, max: 30, step: 1, val: MARKER_PARAMS.c_value },
+    { key: "closing_iter", label: "Closing（膨張回数）", min: 0, max: 15, step: 1, val: MARKER_PARAMS.closing_iter },
+    { key: "min_area", label: "Min_Area（最小面積）", min: 50, max: 5000, step: 10, val: MARKER_PARAMS.min_area },
+    { key: "solidity_thr", label: "Solidity（充填率）", min: 0.1, max: 1.0, step: 0.05, val: MARKER_PARAMS.solidity_thr },
+  ];
+
+  body.innerHTML = `
+    <p class="rv-note">マーカー検出に失敗しました。スライダーで<b>検出パラメータを調整</b>し、
+      緑枠が<b>4つ</b>付く状態にして「この設定で確定」を押してください。うまくいかなければ「手動で4点タップ」へ。</p>
+    <div class="rv-tuner">
+      <div class="rv-previews">
+        <figure><canvas class="rv-pv-result"></canvas><figcaption>検出結果（緑=マーカー候補）</figcaption></figure>
+        <figure><canvas class="rv-pv-thresh"></canvas><figcaption>二値化プレビュー</figcaption></figure>
+      </div>
+      <div class="rv-sliders"></div>
+    </div>
+    <div class="rv-count">検出: 0 / 4</div>
+    <p class="rv-guide">目安: マーカーが消える→C_Value下げ ／ ノイズ過多→C_Value上げ ／ 輪郭欠損→Closing上げ ／
+      未検出→Solidity・Min_Area下げ ／ 文字を誤検出→Min_Area上げ ／ 枠を誤検出→Solidity上げ</p>
+    <div class="rv-actions">
+      <button class="btn-sub rv-manual">手動で4点タップ</button>
+      <button class="btn rv-confirm" disabled>この設定で確定</button>
+    </div>`;
+
+  const resultC = body.querySelector(".rv-pv-result");
+  const threshC = body.querySelector(".rv-pv-thresh");
+  const countEl = body.querySelector(".rv-count");
+  const confirmBtn = body.querySelector(".rv-confirm");
+  const slidersWrap = body.querySelector(".rv-sliders");
+
+  const state = {};
+  const readEls = {};
+  for (const s of SLIDERS) {
+    state[s.key] = s.val;
+    const row = document.createElement("div");
+    row.className = "rv-srow";
+    row.innerHTML = `<label>${s.label}</label>
+      <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.val}" data-key="${s.key}" />
+      <span class="rv-sval">${s.val}</span>`;
+    const inp = row.querySelector("input");
+    const valEl = row.querySelector(".rv-sval");
+    inp.addEventListener("input", () => {
+      state[s.key] = parseFloat(inp.value);
+      valEl.textContent = s.step < 1 ? state[s.key].toFixed(2) : state[s.key];
+      scheduleUpdate();
+    });
+    readEls[s.key] = inp;
+    slidersWrap.appendChild(row);
+  }
+
+  const params = () => ({ ...state, max_area: MARKER_PARAMS.max_area });
+
+  const drawResult = (hulls, centers) => {
+    resultC.width = rawCanvas.width; resultC.height = rawCanvas.height;
+    const g = resultC.getContext("2d");
+    g.drawImage(rawCanvas, 0, 0);
+    g.strokeStyle = "#059669"; g.lineWidth = 4;
+    for (const h of hulls) {
+      g.beginPath();
+      h.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+      g.closePath(); g.stroke();
+    }
+    g.fillStyle = "#dc2626";
+    for (const c of centers) { g.beginPath(); g.arc(c[0], c[1], 9, 0, Math.PI * 2); g.fill(); }
+  };
+
+  let timer = null;
+  const scheduleUpdate = () => { clearTimeout(timer); timer = setTimeout(update, 120); };
+  function update() {
+    const src = cv.imread(rawCanvas);
+    const p = params();
+    const th = markerThreshold(src, p);
+    cv.imshow(threshC, th);
+    th.delete();
+    const { centers, hulls } = detectMarkerCandidates(src, p);
+    src.delete();
+    drawResult(hulls, centers);
+    const n = centers.length;
+    countEl.textContent = `検出: ${n} / 4`;
+    countEl.className = "rv-count " + (n === 4 ? "ok" : "err");
+    confirmBtn.disabled = n !== 4;
+  }
+
+  body.querySelector(".rv-manual").onclick = () => cornerMode(body, rawCanvas, ctx, onDone);
+  confirmBtn.onclick = () => {
+    const src = cv.imread(rawCanvas);
+    const coords = detectMarkers(src, params());
+    src.delete();
+    if (!coords) {
+      countEl.textContent = "4点見つかりましたが長方形配置ではありません。位置を見直すか手動タップへ。";
+      countEl.className = "rv-count err";
+      return;
+    }
+    onDone(coords);
+  };
+
+  update();
 }
 
 // ---- 四隅タップモード ----
