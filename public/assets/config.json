@@ -1,0 +1,30 @@
+{
+  "marker_detection": {
+    "description": "四隅マーカー検出の閾値",
+    "block_size": 11,
+    "c_value": 2,
+    "closing_iter": 2,
+    "min_area": 500,
+    "solidity_thr": 0.8
+  },
+  "digit_recognition": {
+    "description": "数字認識の前処理・フィルター閾値",
+    "ink_threshold": 9,
+    "_ink_threshold_comment": "暗いピクセルがこれ未満なら汚れ/ノイズと判定（分析結果: 4px未満は99%汚れ）",
+    "tens_place_min_ink": 15,
+    "_tens_place_min_ink_comment": "十の位（滅多に使われない）のノイズ最大値は7px。安全マージンで15px以上を要求",
+    "aspect_ratio_max": 1.85,
+    "_aspect_ratio_max_comment": "数字のバウンディングボックスのアスペクト比の上限。これを超えたら数字ノイズと判定",
+    "kernel_open_size": [2, 2],
+    "_kernel_open_comment": "モルフォロジー OPEN (ノイズ除去) の kernel サイズ",
+    "kernel_close_size": [3, 3],
+    "_kernel_close_comment": "モルフォロジー CLOSE (かすれ補修) の kernel サイズ"
+  },
+  "inference": {
+    "description": "推論・信頼度判定の閾値",
+    "confidence_threshold": 0.8,
+    "_confidence_threshold_comment": "推論確度がこれ未満なら『低信頼度』と判定（訂正画面でハイライト対象）",
+    "tens_place_valid_classes": [1, 2],
+    "_tens_place_valid_classes_comment": "十の位として有効な予測クラス。0や3-9は『あり得ない』ため弾く"
+  }
+}

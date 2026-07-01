@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Phase 2 PDF→Canvas 検証</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 1rem; line-height: 1.5; }
+    .ok { color: #059669; } .ng { color: #dc2626; } .info { color: #2563eb; }
+    pre { background:#f1f5f9; padding:.5rem 1rem; border-radius:6px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Phase 2: PDF→Canvas（pdf.js）実PDF検証</h1>
+  <p>実スキャンPDFを pdf.js で展開し、各ページに対して マーカー検出→台形補正→認識 を通す。
+     pdf2image(200dpi) とはラスタライザが異なるため画素一致ではなく、
+     「検出成功率」と「認識が妥当に走るか」を確認する。</p>
+  <pre id="out">初期化中...</pre>
+
+  <script>window.Module = { onRuntimeInitialized() { window.__CV_READY__ = true; } };</script>
+  <script async src="../public/assets/vendor/opencv.js"></script>
+  <script src="../public/assets/vendor/tf.min.js"></script>
+  <script src="../public/assets/vendor/pdf.min.js"></script>
+
+  <script type="module">
+    import { loadConfig, parseRoiCsv } from "../src/config.js";
+    import { extractRois, deleteRois } from "../src/extractor.js";
+    import { predictNumbers } from "../src/predictor.js";
+    import { initBackend } from "../src/backend.js";
+    import { detectMarkers } from "../src/markerDetector.js";
+    import { transformImage } from "../src/geometry.js";
+    import { pdfToCanvases } from "../src/pdf.js";
+
+    const ASSETS = "../public/assets/";
+    const outEl = document.getElementById("out");
+    const log = (m, c) => { const s=document.createElement("span"); if(c)s.className=c; s.textContent=m+"\n"; outEl.appendChild(s); console.log("[pdf] "+m); };
+    async function waitCv(){ const t0=Date.now(); while(!window.__CV_READY__||typeof window.tf==="undefined"){ if(Date.now()-t0>30000) throw new Error("timeout"); await new Promise(r=>setTimeout(r,200)); } }
+
+    async function run() {
+      outEl.textContent = "";
+      await waitCv();
+      await initBackend();
+      const model = await tf.loadLayersModel(ASSETS + "model/model.json");
+      const cfg = await loadConfig(ASSETS);
+      const roiRows = parseRoiCsv(await (await fetch(ASSETS + "ROI_coordinate.csv")).text());
+      log("準備完了。PDF読み込み中...", "info");
+
+      const buf = await (await fetch("testdata/sample.pdf")).arrayBuffer();
+      const t0 = performance.now();
+      const canvases = await pdfToCanvases(buf, {
+        workerSrc: ASSETS + "vendor/pdf.worker.min.js",
+        targetLongEdge: 1654,
+      });
+      log(`PDF展開 OK: ${canvases.length} ページ (${((performance.now()-t0)/1000).toFixed(1)}s)`, "ok");
+      if (canvases.length) log(`ページ寸法: ${canvases[0].width}x${canvases[0].height}px`, "info");
+
+      let markerOk = 0, withDigits = 0, dateOk = 0;
+      const N = Math.min(canvases.length, 12); // 先頭12ページを検査
+      for (let i = 0; i < N; i++) {
+        const src = cv.imread(canvases[i]);
+        const coords = detectMarkers(src);
+        if (!coords) { log(`  page ${i+1}: マーカー検出失敗`, "ng"); src.delete(); continue; }
+        markerOk++;
+        const tMat = transformImage(src, coords);
+        const rois = extractRois(tMat, roiRows);
+        const preds = await predictNumbers(rois, model, cfg);
+        deleteRois(rois); tMat.delete(); src.delete();
+        const digits = Object.entries(preds).filter(([k,v]) =>
+          !k.endsWith("_confidence") && !k.endsWith("_low_confidence_flag") && v !== "");
+        if (digits.length) withDigits++;
+        const dstr = (preds.date_1 || "") + (preds.date_0 || "");
+        if (preds.date_0) dateOk++;
+        log(`  page ${i+1}: marker✓ 認識${digits.length}桁 日付=${dstr||"-"}`, "info");
+      }
+
+      log("\n---------- 結果 ----------");
+      log(`検査 ${N} ページ中: マーカー検出 ${markerOk}, 認識桁あり ${withDigits}, 日付読取 ${dateOk}`,
+          markerOk >= N * 0.8 ? "ok" : "ng");
+      log(markerOk >= N * 0.8 ? "\n✓ PDF→Canvas→認識 パイプライン動作OK" : "\n△ 検出率が低い（要較正）",
+          markerOk >= N * 0.8 ? "ok" : "ng");
+      window.__PDF_DONE__ = true;
+      window.__PDF_SUMMARY__ = { pages: canvases.length, inspected: N, markerOk, withDigits, dateOk,
+                                 dim: canvases[0] ? [canvases[0].width, canvases[0].height] : null };
+    }
+    run().catch((e) => { log("エラー: " + e.stack, "ng"); window.__PDF_DONE__ = true; });
+  </script>
+</body>
+</html>

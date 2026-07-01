@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Phase 1 認識コア照合</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 1rem; line-height: 1.5; }
+    .ok { color: #059669; } .ng { color: #dc2626; } .info { color: #2563eb; }
+    pre { background:#f1f5f9; padding:.5rem 1rem; border-radius:6px; white-space:pre-wrap; }
+    h2 { margin-top:1.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Phase 1: 認識コアの Python 照合</h1>
+  <p>台形補正済み画像を入力に、JS(OpenCV.js + tfjs) の extractor/segmenter/predictor 出力を
+     Python 正解(reference.json) と 1対1 で照合します。</p>
+  <pre id="out">初期化中...</pre>
+
+  <script>
+    // opencv.js 初期化フック（スクリプト読み込み前に定義）
+    window.Module = { onRuntimeInitialized() { window.__CV_READY__ = true; } };
+  </script>
+  <script async src="../public/assets/vendor/opencv.js"></script>
+  <script src="../public/assets/vendor/tf.min.js"></script>
+
+  <script type="module">
+    import { loadConfig, parseRoiCsv } from "../src/config.js";
+    import { extractRois, deleteRois } from "../src/extractor.js";
+    import { segmentDigit } from "../src/segmenter.js";
+    import { predictNumbers } from "../src/predictor.js";
+    import { initBackend } from "../src/backend.js";
+
+    const SAMPLES = ["0101","0102","0103","0104","0105","0201","0202","0301","0302","0303",
+                     "0304","0305","0306","0401","0402","0403","0404","0405","0501","0502"];
+    const ASSETS = "../public/assets/";
+    const outEl = document.getElementById("out");
+    function log(msg, cls) {
+      const s = document.createElement("span");
+      if (cls) s.className = cls;
+      s.textContent = msg + "\n";
+      outEl.appendChild(s);
+      console.log("[phase1] " + msg);
+    }
+
+    async function waitCv() {
+      const t0 = Date.now();
+      while (!window.__CV_READY__ || typeof window.tf === "undefined") {
+        if (Date.now() - t0 > 30000) throw new Error("cv/tf 初期化タイムアウト");
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    async function loadMat(url) {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      return cv.imread(c); // RGBA
+    }
+
+    function cmpSeg(jsSeg, refSeg) {
+      // 返り値: { status, maxDiff, ndiff }
+      if (jsSeg === null && refSeg === null) return { status: "both-null" };
+      if (jsSeg === null || refSeg === null)
+        return { status: "null-mismatch", js: jsSeg ? "arr" : "null", ref: refSeg ? "arr" : "null" };
+      let maxDiff = 0, ndiff = 0;
+      for (let i = 0; i < 784; i++) {
+        const d = Math.abs(jsSeg[i] - refSeg[i]);
+        if (d > 0) ndiff++;
+        if (d > maxDiff) maxDiff = d;
+      }
+      return { status: "arr", maxDiff, ndiff };
+    }
+
+    async function run() {
+      outEl.textContent = "";
+      await waitCv();
+      const backend = await initBackend();
+      log("OpenCV.js / tfjs 準備完了。version tfjs=" + tf.version.tfjs + " backend=" + backend, "info");
+
+      const model = await tf.loadLayersModel(ASSETS + "model/model.json");
+      const cfg = await loadConfig(ASSETS);
+      const roiRows = parseRoiCsv(await (await fetch(ASSETS + "ROI_coordinate.csv")).text());
+      log("ROI 定義 " + roiRows.length + " 件, config 読込 OK", "info");
+
+      let totalSegChecked = 0, segMax = 0, segNullMismatch = 0, segPixelDiff = 0;
+      let predMismatch = 0, confMax = 0, allPass = true;
+
+      let tested = 0, skipped = 0;
+      for (const stem of SAMPLES) {
+        const refResp = await fetch("testdata/" + stem + "_reference.json");
+        if (!refResp.ok) { skipped++; continue; } // マーカー検出失敗等で正解が無い画像はスキップ
+        tested++;
+        log("\n=== " + stem + " ===");
+        const ref = await refResp.json();
+        const src = await loadMat("testdata/" + stem + "_transformed.png");
+        const rois = extractRois(src, roiRows);
+
+        // --- (A) セグメント照合 ---
+        for (const { name, mat } of rois) {
+          const refEntry = ref.rois[name];
+          const res = (mat && mat.rows > 0 && mat.cols > 0) ? segmentDigit(mat, cfg) : null;
+          const jsSeg = res ? res.seg : null;
+          const c = cmpSeg(jsSeg, refEntry.seg28);
+          if (c.status === "null-mismatch") {
+            segNullMismatch++;
+            allPass = false;
+            log(`  [seg NG] ${name}: js=${c.js} ref=${c.ref}`, "ng");
+          } else if (c.status === "arr") {
+            totalSegChecked++;
+            segMax = Math.max(segMax, c.maxDiff);
+            segPixelDiff += c.ndiff;
+            if (c.maxDiff > 2) log(`  [seg差] ${name}: maxΔ=${c.maxDiff} 差分px=${c.ndiff}`, "ng");
+          }
+        }
+
+        // --- (B) 予測照合 ---
+        const preds = await predictNumbers(rois, model, cfg);
+        // 数字キー（_confidence/_flag以外）を比較
+        const keys = new Set([
+          ...Object.keys(ref.predictions),
+          ...Object.keys(preds),
+        ]);
+        const shownDigits = [];
+        for (const k of keys) {
+          if (k.endsWith("_confidence") || k.endsWith("_low_confidence_flag")) continue;
+          const jv = preds[k] ?? "";
+          const rv = ref.predictions[k] ?? "";
+          if (String(jv) !== String(rv)) {
+            predMismatch++;
+            allPass = false;
+            log(`  [pred NG] ${k}: js='${jv}' ref='${rv}'`, "ng");
+          }
+          if (jv !== "" && jv != null) shownDigits.push(`${k}=${jv}`);
+        }
+        // 信頼度比較
+        for (const k of Object.keys(ref.predictions)) {
+          if (!k.endsWith("_confidence")) continue;
+          if (preds[k] != null) confMax = Math.max(confMax, Math.abs(preds[k] - ref.predictions[k]));
+        }
+        log(`  認識桁: ${shownDigits.join(", ") || "(なし)"}`, "info");
+
+        deleteRois(rois);
+        src.delete();
+      }
+
+      log("\n---------- 総合結果 ----------");
+      log(`対象画像: ${tested} 枚照合 / ${skipped} 枚スキップ(正解なし)`, "info");
+      log(`セグメント: 照合 ${totalSegChecked} 件, 最大画素差 ${segMax}, 差分画素合計 ${segPixelDiff}, null不一致 ${segNullMismatch}`,
+          segNullMismatch === 0 && segMax <= 2 ? "ok" : "ng");
+      log(`予測: 不一致 ${predMismatch} 件, 信頼度最大差 ${confMax.toExponential(2)}`,
+          predMismatch === 0 ? "ok" : "ng");
+      log(allPass && segMax <= 2 ? "\n✓ Python と一致（Phase 1 合格）" : "\n✗ 差分あり（要確認）",
+          allPass && segMax <= 2 ? "ok" : "ng");
+      window.__PHASE1_PASS__ = allPass && segMax <= 2;
+      window.__PHASE1_SUMMARY__ = { totalSegChecked, segMax, segPixelDiff, segNullMismatch, predMismatch, confMax };
+    }
+
+    run().catch((e) => { log("エラー: " + e.stack, "ng"); window.__PHASE1_PASS__ = false; });
+  </script>
+</body>
+</html>

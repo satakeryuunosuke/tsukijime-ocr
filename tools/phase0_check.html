@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Phase 0 疎通チェック</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 1rem; line-height: 1.6; }
+    .ok { color: #059669; } .ng { color: #dc2626; } .info { color: #2563eb; }
+    pre { background:#f1f5f9; padding:.5rem 1rem; border-radius:6px; white-space:pre-wrap; }
+    h2 { margin-top:1.5rem; border-bottom:1px solid #e2e8f0; padding-bottom:.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Phase 0 疎通チェック</h1>
+  <p>OpenCV.js の必要関数の有無と、TensorFlow.js + 変換済みモデルの読み込み・推論を検証します。</p>
+  <h2>1. OpenCV.js</h2>
+  <pre id="cv-out">読み込み中...</pre>
+  <h2>2. TensorFlow.js + モデル</h2>
+  <pre id="tf-out">待機中...</pre>
+
+  <script>
+    // ---- 検証結果を画面とconsoleの両方へ ----
+    function log(elId, msg, cls) {
+      const el = document.getElementById(elId);
+      const line = document.createElement('span');
+      if (cls) line.className = cls;
+      line.textContent = msg + "\n";
+      el.appendChild(line);
+      console.log("[phase0] " + msg);
+    }
+
+    // ---- OpenCV.js の必要関数リスト（移植で使用するAPI） ----
+    const REQUIRED_CV = [
+      "cvtColor","GaussianBlur","adaptiveThreshold","threshold","morphologyEx",
+      "findContours","convexHull","contourArea","arcLength","approxPolyDP",
+      "boundingRect","moments","getPerspectiveTransform","warpPerspective",
+      "resize","matFromArray","Mat","MatVector","Rect","Size"
+    ];
+    const REQUIRED_CONST = [
+      "COLOR_RGBA2GRAY","ADAPTIVE_THRESH_GAUSSIAN_C","THRESH_BINARY_INV",
+      "THRESH_OTSU","MORPH_CLOSE","MORPH_OPEN","RETR_EXTERNAL","CHAIN_APPROX_SIMPLE"
+    ];
+
+    var Module = {
+      onRuntimeInitialized: function () {
+        document.getElementById('cv-out').textContent = "";
+        log("cv-out", "OpenCV.js ランタイム初期化 OK  build=" + (cv.getBuildInformation ? "取得可" : "?"), "ok");
+        let missing = [];
+        REQUIRED_CV.forEach(fn => { if (typeof cv[fn] === "undefined") missing.push("fn:" + fn); });
+        REQUIRED_CONST.forEach(c => { if (typeof cv[c] === "undefined") missing.push("const:" + c); });
+        if (missing.length === 0) {
+          log("cv-out", "必要な関数・定数 " + (REQUIRED_CV.length + REQUIRED_CONST.length) + " 件すべて存在 ✓", "ok");
+        } else {
+          log("cv-out", "不足: " + missing.join(", "), "ng");
+        }
+        // 実際に warpPerspective まで動くか最小実行
+        try {
+          let src = new cv.Mat(10, 10, cv.CV_8UC1);
+          let dst = new cv.Mat();
+          cv.resize(src, dst, new cv.Size(28, 28));
+          log("cv-out", "resize 実行テスト OK (10x10 -> " + dst.cols + "x" + dst.rows + ") ✓", "ok");
+          src.delete(); dst.delete();
+        } catch (e) {
+          log("cv-out", "実行テスト失敗: " + e, "ng");
+        }
+        window.__CV_READY__ = missing.length === 0;
+        loadModel();
+      }
+    };
+
+    async function loadModel() {
+      const out = 'tf-out';
+      document.getElementById(out).textContent = "";
+      try {
+        if (typeof tf === "undefined") { log(out, "tf 未ロード", "ng"); return; }
+        log(out, "TensorFlow.js version " + tf.version.tfjs, "info");
+        // 変換済みモデル（Phase 0 で生成）を読み込む
+        const model = await tf.loadLayersModel("../public/assets/model/model.json");
+        log(out, "モデル読み込み OK", "ok");
+        log(out, "入力shape: " + JSON.stringify(model.inputs[0].shape), "info");
+        log(out, "出力shape: " + JSON.stringify(model.outputs[0].shape), "info");
+        // ダミー 28x28x1 で推論
+        const x = tf.zeros([1, 28, 28, 1]);
+        const y = model.predict(x);
+        const data = await y.data();
+        log(out, "ダミー推論 OK  出力次元=" + data.length + " (期待:10)", data.length === 10 ? "ok" : "ng");
+        x.dispose(); y.dispose();
+
+        // ---- 正解ベクトル照合（Keras と tfjs の数値一致確認） ----
+        try {
+          const ref = await (await fetch("testdata/reference_vectors.json")).json();
+          log(out, "正解ベクトル読み込み OK  samples=" + ref.samples.length, "info");
+          let maxDiffAll = 0, argmaxMismatch = 0;
+          for (const s of ref.samples) {
+            const inp = tf.tensor(s.input, [1, 28, 28, 1]);
+            const p = model.predict(inp);
+            const pd = await p.data();
+            let maxDiff = 0, jsArgmax = 0, jsMax = -Infinity;
+            for (let i = 0; i < 10; i++) {
+              maxDiff = Math.max(maxDiff, Math.abs(pd[i] - s.output[i]));
+              if (pd[i] > jsMax) { jsMax = pd[i]; jsArgmax = i; }
+            }
+            maxDiffAll = Math.max(maxDiffAll, maxDiff);
+            if (jsArgmax !== s.argmax) argmaxMismatch++;
+            log(out, `  sample#${s.id}: argmax js=${jsArgmax} keras=${s.argmax}  maxΔ=${maxDiff.toExponential(2)}`,
+                jsArgmax === s.argmax ? "ok" : "ng");
+            inp.dispose(); p.dispose();
+          }
+          const pass = argmaxMismatch === 0 && maxDiffAll < 1e-4;
+          log(out, `照合結果: argmax不一致=${argmaxMismatch}  全体maxΔ=${maxDiffAll.toExponential(2)}  → ${pass ? "一致 ✓" : "要確認"}`,
+              pass ? "ok" : "ng");
+          window.__MODEL_MATCH__ = pass;
+        } catch (e) {
+          log(out, "正解ベクトル照合スキップ: " + e, "info");
+        }
+        window.__MODEL_READY__ = true;
+      } catch (e) {
+        log(out, "モデル未変換またはエラー: " + e, "ng");
+        log(out, "→ tensorflowjs_converter 実行後に再確認してください", "info");
+        window.__MODEL_READY__ = false;
+      }
+    }
+  </script>
+  <script async src="../public/assets/vendor/tf.min.js"></script>
+  <script async src="../public/assets/vendor/opencv.js"></script>
+</body>
+</html>
