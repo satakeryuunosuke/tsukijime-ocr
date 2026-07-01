@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>築地・極 AI-OCR（PWA版）</title>
+  <title>グッズ交換票・AI読み取り</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0f172a" />
   <link rel="apple-touch-icon" href="public/assets/icon.png" />
@@ -11,8 +11,8 @@
 </head>
 <body>
   <header>
-    <h1>築地・極 AI-OCR</h1>
-    <p class="sub">注文票PDF / 画像から数値を自動読み取り、CSVを出力します（オフライン・端末内処理）</p>
+    <h1>グッズ交換票・AI読み取り</h1>
+    <p class="sub">交換票PDF / 画像から数値を自動読み取り、検算・訂正してCSVを出力します（オフライン・端末内処理）</p>
   </header>
 
   <main>
@@ -40,7 +40,7 @@
       </div>
       <table class="result-table">
         <thead>
-          <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th></tr>
+          <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>
         </thead>
         <tbody id="resultBody"></tbody>
       </table>

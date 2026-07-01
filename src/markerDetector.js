@@ -20,7 +20,8 @@ function argExtreme(arr, cmp) {
 }
 
 // _order_points の移植: [左上, 右上, 右下, 左下]
-function orderPoints(pts) {
+// 手動四隅指定（マーカー検出失敗時のフォールバック）でも再利用するため export。
+export function orderPoints(pts) {
   const sum = pts.map((p) => p[0] + p[1]);
   const diff = pts.map((p) => p[1] - p[0]); // np.diff([x,y]) = y - x
   const tl = pts[argExtreme(sum, (a, b) => a < b)];

@@ -71,3 +71,60 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .ok { color: var(--ok); font-weight: 600; }
 .warn { color: var(--warn); font-weight: 600; }
 .err { color: var(--err); font-weight: 600; }
+
+.clickable { cursor: pointer; }
+.clickable:hover { background: #f0f9ff; }
+.edit-cell { color: var(--primary-d); white-space: nowrap; font-weight: 600; }
+
+/* 訂正モーダル */
+.btn-sub {
+  background: #e2e8f0; color: #334155; border: none; padding: .45rem .8rem;
+  border-radius: 7px; font-size: .82rem; font-weight: 600; cursor: pointer;
+}
+.btn-sub:hover { background: #cbd5e1; }
+
+.rv-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.55);
+  display: flex; align-items: flex-start; justify-content: center; z-index: 1000;
+  padding: 1rem; overflow: auto;
+}
+.rv-modal {
+  background: var(--card); border-radius: 14px; width: min(1100px, 100%);
+  margin: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.rv-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .85rem 1.1rem; border-bottom: 1px solid var(--border);
+}
+.rv-title { font-weight: 700; }
+.rv-close {
+  border: none; background: #f1f5f9; width: 32px; height: 32px; border-radius: 8px;
+  font-size: 1rem; cursor: pointer;
+}
+.rv-body { padding: 1rem 1.1rem; }
+.rv-note { background: #fef2f2; border: 1px solid #fecaca; padding: .6rem .8rem; border-radius: 8px; font-size: .9rem; }
+.rv-corner-wrap { text-align: center; margin: .75rem 0; }
+.rv-corner-canvas { border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; touch-action: manipulation; }
+.rv-corner-status { text-align: center; color: var(--muted); font-size: .85rem; }
+
+.rv-edit { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+.rv-img { flex: 1 1 380px; min-width: 300px; }
+.rv-disp { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; }
+.rv-form { flex: 1 1 300px; min-width: 260px; }
+
+.rv-field { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.rv-field > label { min-width: 110px; font-size: .85rem; font-weight: 600; }
+.rv-field input { width: 70px; padding: .35rem .45rem; border: 1px solid var(--border); border-radius: 6px; font-size: .95rem; }
+
+.rv-products {
+  max-height: 320px; overflow: auto; border: 1px solid var(--border);
+  border-radius: 8px; padding: .5rem; margin: .5rem 0;
+}
+.rv-prow { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .18rem .2rem; }
+.rv-prow label { font-size: .85rem; }
+.rv-prow small { color: var(--muted); }
+.rv-prow input { width: 64px; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; }
+
+.rv-check { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; font-size: .9rem; margin: .5rem 0; }
+.rv-check > div { margin: .15rem 0; }
+.rv-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }

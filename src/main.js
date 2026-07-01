@@ -1,16 +1,20 @@
 // アプリ本体コントローラ。
-// PDF/画像アップロード → PDF→Canvas → AI認識 → 結果表示 → CSV ダウンロード。
+// アップロード → 展開 → AI認識 → 検算/日付判定 → 訂正・手動フォールバック → CSV出力。
 import { loadConfig, parseRoiCsv } from "./config.js";
 import { initBackend } from "./backend.js";
-import { pdfToCanvases } from "./pdf.js";
+import { openPdf, renderPdfPage } from "./pdf.js";
 import { recognizePage } from "./pipeline.js";
 import { buildCsv, downloadCsv } from "./csv.js";
+import { loadProducts } from "./products.js";
+import { validatePage, daysInMonth } from "./validate.js";
+import { openReview } from "./review.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
 
-let ctx = null;        // { roiRows, model, cfg }
-let results = [];      // 認識結果
+let ctx = null;       // { roiRows, products, model, cfg }
+let sources = [];     // [{ type:'pdf', doc } | { type:'image', bitmap }]
+let pages = [];       // ページ状態
 
 function setStatus(msg) { $("status").textContent = msg; }
 
@@ -24,14 +28,19 @@ async function waitCv() {
 
 async function init() {
   try {
+    // 年月の初期値（当月）
+    const now = new Date();
+    $("ymInput").value = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+
     setStatus("エンジン初期化中…");
     await waitCv();
     const backend = await initBackend();
     const model = await window.tf.loadLayersModel(ASSETS + "model/model.json");
     const cfg = await loadConfig(ASSETS);
     const roiRows = parseRoiCsv(await (await fetch(ASSETS + "ROI_coordinate.csv")).text());
-    ctx = { roiRows, model, cfg };
-    setStatus(`準備完了（backend=${backend}, ROI ${roiRows.length}件）。PDFまたは画像を選択してください。`);
+    const products = await loadProducts(ASSETS);
+    ctx = { roiRows, products, model, cfg };
+    setStatus(`準備完了（backend=${backend}, 商品${products.length}件）。PDFまたは画像を選択してください。`);
     $("fileInput").disabled = false;
   } catch (e) {
     setStatus("初期化エラー: " + e.message);
@@ -39,134 +48,161 @@ async function init() {
   }
 }
 
-async function fileToPages(file) {
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  if (isPdf) {
-    const buf = await file.arrayBuffer();
-    const canvases = await pdfToCanvases(buf, {
-      workerSrc: ASSETS + "vendor/pdf.worker.min.js",
-      targetLongEdge: 1654,
-    });
-    return canvases.map((c, i) => ({ name: `${file.name} #${i + 1}`, canvas: c }));
-  }
-  const bmp = await createImageBitmap(file);
+// ---- 生画像の遅延レンダリング ----
+async function renderRaw(page) {
+  const s = sources[page.sourceIdx];
+  if (s.type === "pdf") return await renderPdfPage(s.doc, page.pageNum, 1654);
   const c = document.createElement("canvas");
-  c.width = bmp.width;
-  c.height = bmp.height;
-  c.getContext("2d").drawImage(bmp, 0, 0);
-  return [{ name: file.name, canvas: c }];
+  c.width = s.bitmap.width;
+  c.height = s.bitmap.height;
+  c.getContext("2d").drawImage(s.bitmap, 0, 0);
+  return c;
+}
+
+async function prepareSources(files) {
+  sources = [];
+  pages = [];
+  for (const f of files) {
+    const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+      const doc = await openPdf(await f.arrayBuffer(), ASSETS + "vendor/pdf.worker.min.js");
+      const idx = sources.push({ type: "pdf", doc }) - 1;
+      for (let p = 1; p <= doc.numPages; p++) {
+        pages.push({ name: `${f.name} #${p}`, sourceIdx: idx, pageNum: p });
+      }
+    } else {
+      const bitmap = await createImageBitmap(f);
+      const idx = sources.push({ type: "image", bitmap }) - 1;
+      pages.push({ name: f.name, sourceIdx: idx, pageNum: 1 });
+    }
+  }
+}
+
+function statusHtml(page) {
+  if (!page.ok) return `<span class="err">✗ マーカー検出失敗（クリックで手動補正）</span>`;
+  const v = page.valid || {};
+  if (v.checksumOk === false) return `<span class="err">✗ 合計不一致（要確認）</span>`;
+  if (v.dateOk === false) return `<span class="err">✗ 日付不正（要確認）</span>`;
+  if (page.lowConfidence && page.lowConfidence.length)
+    return `<span class="warn">⚠ 低信頼度: ${page.lowConfidence.join(", ")}</span>`;
+  return `<span class="ok">✓ OK</span>`;
 }
 
 function digitsSummary(predictions) {
   const parts = [];
-  for (const [k, v] of Object.entries(predictions)) {
+  for (const [k, v] of Object.entries(predictions || {})) {
     if (k.endsWith("_confidence") || k.endsWith("_low_confidence_flag")) continue;
     if (v !== "" && v != null) parts.push(`${k}=${v}`);
   }
   return parts;
 }
-
-function dateOf(predictions) {
-  const d = `${predictions.date_1 ?? ""}${predictions.date_0 ?? ""}`;
-  return d || "-";
-}
+const dateOf = (p) => (p && (`${p.date_1 ?? ""}${p.date_0 ?? ""}`)) || "-";
 
 function renderResults() {
-  const ok = results.filter((r) => r.ok);
-  const markerFail = results.filter((r) => !r.ok);
-  const lowConf = ok.filter((r) => r.lowConfidence && r.lowConfidence.length);
+  const ok = pages.filter((p) => p.ok);
+  const markerFail = pages.filter((p) => !p.ok);
+  const needFix = ok.filter((p) => p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false));
+  const lowConf = ok.filter((p) => p.lowConfidence && p.lowConfidence.length);
 
   $("summary").innerHTML =
-    `<b>${results.length}</b> ページ処理 / 認識成功 <b>${ok.length}</b> / ` +
-    `<span class="warn">要確認(低信頼度) ${lowConf.length}</span> / ` +
-    `<span class="err">マーカー検出失敗 ${markerFail.length}</span>`;
+    `<b>${pages.length}</b> ページ / 認識 <b>${ok.length}</b> / ` +
+    `<span class="err">検算・日付NG ${needFix.length}</span> / ` +
+    `<span class="warn">低信頼度 ${lowConf.length}</span> / ` +
+    `<span class="err">マーカー失敗 ${markerFail.length}</span>`;
 
-  const rows = results
-    .map((r) => {
-      if (!r.ok) {
-        return `<tr class="row-err"><td>${r.name}</td><td>-</td><td>-</td>
-                <td class="err">✗ マーカー検出失敗（要手動処理）</td></tr>`;
-      }
-      const digits = digitsSummary(r.predictions);
-      const low = r.lowConfidence.length
-        ? `<span class="warn">⚠ 低信頼度: ${r.lowConfidence.join(", ")}</span>`
-        : `<span class="ok">✓ OK</span>`;
-      return `<tr><td>${r.name}</td><td>${dateOf(r.predictions)}</td>
-              <td class="digits">${digits.join("　") || "(なし)"}</td><td>${low}</td></tr>`;
+  $("resultBody").innerHTML = pages
+    .map((p, i) => {
+      const digits = p.ok ? digitsSummary(p.predictions).join("　") || "(なし)" : "-";
+      return `<tr data-idx="${i}" class="clickable ${p.ok ? "" : "row-err"}">
+        <td>${p.name}</td><td>${p.ok ? dateOf(p.predictions) : "-"}</td>
+        <td class="digits">${digits}</td><td>${statusHtml(p)}</td>
+        <td class="edit-cell">✎ 編集</td></tr>`;
     })
     .join("");
 
-  $("resultBody").innerHTML = rows;
   $("downloadBtn").disabled = ok.length === 0;
-  $("results").hidden = results.length === 0;
+  $("results").hidden = pages.length === 0;
 }
 
-async function handleFiles(files) {
-  if (!ctx) return;
-  $("fileInput").disabled = true;
-  $("downloadBtn").disabled = true;
-  results = [];
-  $("resultBody").innerHTML = "";
-  $("results").hidden = false;
-
-  // 全ファイルをページへ展開
-  setStatus("ファイルを展開中…");
-  let pages = [];
-  for (const f of files) {
-    try {
-      pages = pages.concat(await fileToPages(f));
-    } catch (e) {
-      console.error("展開失敗", f.name, e);
-      setStatus(`「${f.name}」の展開に失敗しました: ${e.message}`);
-    }
-  }
-
+async function processAll() {
+  const maxDays = daysInMonth($("ymInput").value.trim());
+  ctx.maxDays = maxDays;
   const total = pages.length;
   $("progressWrap").hidden = false;
+
   for (let i = 0; i < total; i++) {
-    const { name, canvas } = pages[i];
+    const page = pages[i];
+    const canvas = await renderRaw(page);
     const src = window.cv.imread(canvas);
     let res;
     try {
       res = await recognizePage(src, ctx);
     } catch (e) {
       res = { ok: false, reason: "error" };
-      console.error(name, e);
+      console.error(page.name, e);
     } finally {
       src.delete();
     }
-    results.push({ name, ...res });
+    page.ok = res.ok;
+    page.coords = res.coords || null;
+    page.predictions = res.predictions || {};
+    page.lowConfidence = res.lowConfidence || [];
+    page.valid = res.ok ? validatePage(page.predictions, ctx.products, maxDays) : null;
 
-    const pct = Math.round(((i + 1) / total) * 100);
-    $("progressBar").style.width = pct + "%";
+    $("progressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";
     setStatus(`認識中… ${i + 1} / ${total} ページ`);
-    // 一定間隔で描画更新
     if (i % 2 === 0 || i === total - 1) {
       renderResults();
       await new Promise((r) => requestAnimationFrame(r));
     }
   }
-
   renderResults();
   $("progressWrap").hidden = true;
-  setStatus(`完了：${total} ページ処理しました。`);
+  setStatus(`完了：${total} ページ処理しました。行をクリックで訂正・検算できます。`);
+}
+
+async function handleFiles(files) {
+  if (!ctx) return;
+  $("fileInput").disabled = true;
+  $("downloadBtn").disabled = true;
+  $("results").hidden = false;
+  setStatus("ファイルを展開中…");
+  try {
+    await prepareSources(files);
+  } catch (e) {
+    setStatus("展開に失敗しました: " + e.message);
+    console.error(e);
+    $("fileInput").disabled = false;
+    return;
+  }
+  await processAll();
   $("fileInput").disabled = false;
 }
 
+// 行クリック → 訂正モーダル
+$("resultBody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-idx]");
+  if (!tr) return;
+  const page = pages[+tr.dataset.idx];
+  openReview(page, {
+    ...ctx,
+    renderRaw,
+    onUpdate: () => renderResults(),
+  }).then(() => renderResults());
+});
+
 function onDownload() {
-  const okRows = results.filter((r) => r.ok);
+  const okRows = pages.filter((p) => p.ok).map((p) => ({ predictions: p.predictions }));
   const csv = buildCsv(okRows, ctx.roiRows);
   const ym = $("ymInput").value.trim() || "output";
   downloadCsv(csv, `recognition_results_${ym}.csv`);
 }
 
-// イベント配線
 $("fileInput").addEventListener("change", (e) => {
   if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files));
 });
 $("downloadBtn").addEventListener("click", onDownload);
 
-// ドラッグ&ドロップ
 const drop = $("dropzone");
 ["dragover", "dragenter"].forEach((ev) =>
   drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));

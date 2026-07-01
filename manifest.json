@@ -1,7 +1,7 @@
 {
-  "name": "築地・極 AI-OCR",
-  "short_name": "築地AI-OCR",
-  "description": "注文票PDF/画像から数値を自動読み取りしCSV出力（オフライン・端末内処理）",
+  "name": "グッズ交換票・AI読み取り",
+  "short_name": "交換票AI",
+  "description": "グッズ交換票PDF/画像から数値を自動読み取り・検算・訂正しCSV出力（オフライン・端末内処理）",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

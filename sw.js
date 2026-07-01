@@ -1,7 +1,7 @@
 // Service Worker: アプリシェルと全アセット（OpenCV.js/tfjs/モデル/設定）を
 // プリキャッシュし、オフラインでも完全動作させる。
 // モデルや辞書を更新したら CACHE 名のバージョンを上げること。
-const CACHE = "tsukijime-ocr-v1";
+const CACHE = "tsukijime-ocr-v2";
 
 const PRECACHE = [
   "./",
@@ -20,6 +20,10 @@ const PRECACHE = [
   "./src/predictor.js",
   "./src/csv.js",
   "./src/styles.css",
+  "./src/products.js",
+  "./src/validate.js",
+  "./src/overlay.js",
+  "./src/review.js",
   // ライブラリ（同梱）
   "./public/assets/vendor/opencv.js",
   "./public/assets/vendor/tf.min.js",
@@ -30,6 +34,7 @@ const PRECACHE = [
   "./public/assets/model/group1-shard1of1.bin",
   "./public/assets/config.json",
   "./public/assets/ROI_coordinate.csv",
+  "./public/assets/product_list.csv",
   "./public/assets/icon.png",
 ];
 
