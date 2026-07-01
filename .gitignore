@@ -7,3 +7,7 @@ tools/testdata/
 # アプリ動作に必須の設定CSV（リポジトリ root の *.csv 除外を打ち消して追跡する）
 !public/assets/ROI_coordinate.csv
 !public/assets/product_list.csv
+
+# 機密ファイル（商品単価・学習済みモデル）
+public/assets/product_list.csv
+public/assets/model/

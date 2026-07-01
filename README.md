@@ -16,10 +16,29 @@
 
 集計・Excel生成・データ保存はデスクトップ版に残す（本アプリは認識・訂正とCSV出力に限定）。
 
-## 実行方法（開発）
-Node 不要・ビルド不要。任意の静的サーバでルートを配信するだけ。
-```
-python -m http.server 8778 --directory tsukijime-ocr-pwa
+## セットアップ
+
+### 機密ファイルの準備
+このリポジトリは**商品単価と学習済みモデルを含みません**（非公開）。以下を自分で用意してください：
+
+1. **商品リスト** → `public/assets/product_list.csv`
+   ```csv
+   code,product_key,japanese_name,point_values
+   1,notes_Y,ノート(黄),10
+   2,notes_B,ノート(青),10
+   ...
+   ```
+
+2. **学習済みモデル** → `public/assets/model/` に以下を配置
+   - `model.json` （TensorFlow.js 変換済み）
+   - `group1-shard1of1.bin` （ウェイト）
+
+3. **ROI座標** (`public/assets/ROI_coordinate.csv`) と **config.json** も同梱（デスクトップ版から同じファイルを使用可）
+
+### 実行方法（開発）
+Node 不要・ビルド不要。上記の機密ファイルを配置後、任意の静的サーバでルートを配信：
+```bash
+python -m http.server 8778
 ```
 `http://localhost:8778/index.html` を開く。
 ※ Service Worker と PDF.js Worker のため file:// 直開きは不可。localhost か HTTPS が必要。
