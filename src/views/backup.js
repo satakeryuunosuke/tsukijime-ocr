@@ -83,9 +83,9 @@ export async function show() {
     </div>
     <div class="panel">
       <h3>月ごとのCSVダウンロード</h3>
-      <p class="view-sub">旧デスクトップ版と同じ5種類のCSV（読み取り結果・日別集計・繰越・入庫・特別交換）をダウンロードします。</p>
+      <p class="view-sub">旧デスクトップ版と同じ5種類のCSV（読み取り結果・日別集計・繰越・入庫・ノート購入）をダウンロードします。</p>
       <table class="result-table">
-        <thead><tr><th>年月</th><th>読み取り</th><th>繰越</th><th>入庫</th><th>特別交換</th><th>実棚</th><th></th></tr></thead>
+        <thead><tr><th>年月</th><th>読み取り</th><th>繰越</th><th>入庫</th><th>ノート購入</th><th>実棚</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7">保存されたデータはまだありません。</td></tr>`}</tbody>
       </table>
     </div>`;

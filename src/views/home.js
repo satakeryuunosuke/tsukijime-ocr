@@ -35,9 +35,9 @@ export async function show() {
       ${card("reader", "2. 交換票の読み取り", pagesN ? `保存済み ${pagesN} 枚` : "未読み取り",
         pagesN > 0, "交換票のスキャンPDFをAIで読み取り、確認・訂正して保存します。月内は何回かに分けてOK。")}
       ${card("arrivals", "3. 入庫の記録", arrivalDays ? `${arrivalDays} 日分入力` : "入庫なし/未入力",
-        arrivalDays > 0, "本部からグッズが届いたら日付ごとに個数を記録します。")}
-      ${card("specials", "4. ノート特別交換", specialsN ? `${specialsN} 件` : "0 件",
-        specialsN > 0, "現金・口座振替・栄冠ポイントでのノート交換を手入力します。")}
+        arrivalDays > 0, "グッズが届いたら日付ごとに個数を記録します。")}
+      ${card("specials", "4. ノート購入", specialsN ? `${specialsN} 件` : "0 件",
+        specialsN > 0, "現金・口座振替・栄冠ポイントでのノート購入を手入力します。")}
       ${card("closing", "5. 月締め（棚卸）", physDone ? "実棚入力済み ✓" : "未実施",
         physDone, "日別台帳と月末の帳簿残を確認し、実際の在庫数と突き合わせてExcelレポートを出力します。")}
     </div>

@@ -1,8 +1,8 @@
 // 月締めタブ。日別台帳と月末帳簿残の確認、実棚数の入力と差異表示、
 // Excel棚卸レポートの出力、保存済みページの管理（削除）を行う。
 import { ensureMonth, putMonth, getMaster } from "../db.js";
-import { computeLedger, noteProducts } from "../ledger.js";
-import { toInt, computeTotalScore } from "../validate.js";
+import { computeLedger, computeDiffs, buildAdjustmentPages } from "../ledger.js";
+import { toInt, computeTotalScore, daysInMonth } from "../validate.js";
 import { downloadReport } from "../excelReport.js";
 
 let app = null;
@@ -17,6 +17,42 @@ async function savePhysical() {
     data[inp.dataset.phys] = toInt(inp.value);
   });
   month.physicalCount = data;
+  await putMonth(month);
+  await show();
+}
+
+// 差異を調整記録で解消する。不足 → 交換ページを自動生成、余剰 → 指定日の入庫に加算。
+async function applyAdjustment() {
+  const month = await ensureMonth(app.ym);
+  const master = await getMaster(month.masterVersion);
+  const products = master.products;
+  if (!month.physicalCount) { alert("先に実棚数を入力・保存してください。"); return; }
+
+  const day = toInt(el().querySelector("#adjDay").value) || daysInMonth(app.ym);
+  const { shortages, surpluses } = computeDiffs(month, products);
+  const nShort = Object.keys(shortages).length;
+  const nSurp = Object.keys(surpluses).length;
+  if (!nShort && !nSurp) { alert("差異はありません。"); return; }
+
+  const nameOf = (k) => (products.find((p) => p.key === k) || { name: k }).name;
+  const lines = [];
+  if (nShort) lines.push("【不足 → 交換記録を作成】\n" +
+    Object.entries(shortages).map(([k, q]) => `  ${nameOf(k)} × ${q}`).join("\n"));
+  if (nSurp) lines.push(`【余剰 → ${day}日の入庫に加算】\n` +
+    Object.entries(surpluses).map(([k, q]) => `  ${nameOf(k)} × ${q}`).join("\n"));
+  if (!window.confirm(
+    `帳簿を実棚数に合わせるため、次の調整記録を作成します（${day}日付け）。\n\n${lines.join("\n")}\n\n` +
+    `作成後は差異が 0 になります。よろしいですか？`)) return;
+
+  if (nShort) {
+    const existing = new Set(month.pages.map((p) => p.name));
+    month.pages.push(...buildAdjustmentPages(shortages, products, day, existing));
+  }
+  if (nSurp) {
+    const a = month.arrivals[day] || {};
+    for (const [k, q] of Object.entries(surpluses)) a[k] = toInt(a[k]) + q;
+    month.arrivals[day] = a;
+  }
   await putMonth(month);
   await show();
 }
@@ -83,6 +119,29 @@ function detailTable(products, ledger) {
     </div>`;
 }
 
+// 差異がある場合のみ表示する調整パネル
+function adjustPanel(month, products) {
+  if (!month.physicalCount) return "";
+  const { shortages, surpluses } = computeDiffs(month, products);
+  if (!Object.keys(shortages).length && !Object.keys(surpluses).length) return "";
+  const maxDays = daysInMonth(month.ym);
+  return `
+    <div class="panel warn-panel">
+      <h3>差異の調整</h3>
+      <p class="view-sub">帳簿を実棚数に合わせます。不足分は交換記録（通常の交換票と同じ形式）として、
+      余剰分は入庫記録として作成されるため、集計・CSV・Excel上は通常の記録と区別されません。</p>
+      <div class="row-actions">
+        <label>記録する日付
+          <select id="adjDay">
+            ${Array.from({ length: maxDays }, (_, i) => i + 1).map((d) =>
+              `<option value="${d}" ${d === maxDays ? "selected" : ""}>${d}日</option>`).join("")}
+          </select>
+        </label>
+        <button id="adjApply" class="btn">差異を調整記録で解消する</button>
+      </div>
+    </div>`;
+}
+
 function pagesPanel(month, products) {
   if (!showPages) {
     return `<button id="clTogglePages" class="btn-sub">保存済みページ一覧を表示（${month.pages.length}枚）</button>`;
@@ -139,6 +198,7 @@ export async function show() {
         <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
       </div>
     </div>
+    ${adjustPanel(month, products)}
     ${detailTable(products, ledger)}
     <div class="panel">
       <h3>保存済みの交換票</h3>
@@ -157,6 +217,8 @@ export async function show() {
       e.target.disabled = false;
     }
   });
+  const adjBtn = el().querySelector("#adjApply");
+  if (adjBtn) adjBtn.addEventListener("click", applyAdjustment);
   const toggle = el().querySelector("#clTogglePages");
   if (toggle) toggle.addEventListener("click", async () => { showPages = !showPages; await show(); });
   el().querySelectorAll("button[data-delpage]").forEach((b) =>

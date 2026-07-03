@@ -90,7 +90,82 @@ export function computeLedger(month, products) {
   return { maxDays, rows, closing, totalExchanged };
 }
 
-// ---- 旧Python版互換のCSV生成 ----
+// ---- 棚卸差異の調整 ----
+// 実棚数と帳簿残に差異があるとき、帳簿を実棚に合わせるための調整記録を作る。
+//   不足（帳簿残 > 実棚）: 通常の交換票と同じ形式のページ（predictions）を生成して追加する。
+//     検算が成立するように合計欄も自動計算する。出力（CSV/Excel）上は通常の交換と区別されない。
+//   余剰（実棚 > 帳簿残）: 指定日の入庫記録に加算する。
+// 制約: 1ページの商品個数は各99まで・合計点数は990点まで（記入欄が2桁のため）。超える分は複数ページに分割。
+
+const PAGE_MAX_TOTAL = 990; // 合計欄は10点単位2桁 → 990点まで
+const PAGE_MAX_QTY = 99;    // 個数欄は2桁
+
+// 差異の計算。返り値: { shortages: {key: 個数}, surpluses: {key: 個数} }
+export function computeDiffs(month, products) {
+  const ledger = computeLedger(month, products);
+  const phys = month.physicalCount || {};
+  const shortages = {}, surpluses = {};
+  for (const p of products) {
+    const d = ledger.closing[p.key] - toInt(phys[p.key]); // 帳簿 − 実棚
+    if (d > 0) shortages[p.key] = d;
+    else if (d < 0) surpluses[p.key] = -d;
+  }
+  return { shortages, surpluses };
+}
+
+// 不足分を交換ページ（predictions形式）に変換。ページ分割は greedy。
+export function buildAdjustmentPages(shortages, products, day, existingNames = new Set()) {
+  const byKey = new Map(products.map((p) => [p.key, p]));
+  const queue = Object.entries(shortages)
+    .filter(([k, q]) => q > 0 && byKey.has(k))
+    .map(([k, q]) => ({ key: k, points: byKey.get(k).points, remaining: q }));
+
+  const pages = [];
+  let current = null, total = 0;
+
+  const newPage = () => {
+    const predictions = {
+      date_1: String(Math.floor(day / 10)),
+      date_0: String(day % 10),
+    };
+    current = predictions;
+    total = 0;
+    pages.push(predictions);
+  };
+  const closePage = () => {
+    if (!current) return;
+    const tens = Math.floor(total / 10);
+    current.total_1 = String(tens % 10);
+    current.total_2 = String(Math.floor(tens / 10) % 10);
+  };
+
+  for (const item of queue) {
+    while (item.remaining > 0) {
+      if (!current) newPage();
+      const room = Math.floor((PAGE_MAX_TOTAL - total) / item.points);
+      const chunk = Math.min(item.remaining, PAGE_MAX_QTY, room);
+      if (chunk <= 0) { closePage(); current = null; continue; }
+      const tens = Math.floor(chunk / 10);
+      current[`${item.key}_1`] = tens ? String(tens) : "";
+      current[`${item.key}_0`] = String(chunk % 10);
+      total += chunk * item.points;
+      item.remaining -= chunk;
+      // 同一商品の残りは次ページへ（1ページ99個上限のため）
+      if (item.remaining > 0) { closePage(); current = null; }
+    }
+  }
+  closePage();
+
+  // ページ名は既存と被らない連番で
+  let n = 1;
+  const named = pages.map((predictions) => {
+    let name;
+    do { name = `在庫調整 ${day}日 #${n++}`; } while (existingNames.has(name));
+    existingNames.add(name);
+    return { name, predictions, savedAt: new Date().toISOString(), adjustment: true };
+  });
+  return named;
+}
 
 function joinCsv(rows) {
   return rows.map((r) => r.join(",")).join("\r\n");

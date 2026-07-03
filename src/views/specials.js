@@ -1,4 +1,4 @@
-// 特別交換タブ。ノートの現金・口座振替・栄冠ポイント交換を明細で記録する
+// ノート購入タブ。ノートの現金・口座振替・栄冠ポイントでの購入を明細で記録する
 // （旧 GUI_tool_3_enter_notes_cdp_hybrid 相当）。
 import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { noteProducts, SPECIAL_METHODS } from "../ledger.js";
@@ -56,8 +56,8 @@ export async function show() {
          .join(" ") || "-";
 
   el().innerHTML = `
-    <h2 class="view-title">ノート特別交換（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
-    <p class="view-sub">現金・口座振替・栄冠ポイントでのノート交換があったら、その都度ここに記録してください（交換票とは別管理）。</p>
+    <h2 class="view-title">ノート購入（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
+    <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入があったら、その都度ここに記録してください（交換票とは別管理）。</p>
     <div class="panel">
       <h3>記録を追加</h3>
       <div class="sp-form">

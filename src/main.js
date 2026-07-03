@@ -3,7 +3,7 @@
 import { loadConfig, parseRoiCsv } from "./config.js";
 import { initBackend } from "./backend.js";
 import { loadProducts } from "./products.js";
-import { getAllMasters, putMaster, getSetting, putSetting } from "./db.js";
+import { getAllMasters, putMaster } from "./db.js";
 import * as home from "./views/home.js";
 import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
@@ -27,7 +27,6 @@ export const app = {
     if (!/^\d{6}$/.test(ym)) return;
     app.ym = ym;
     $("ymInput").value = ym;
-    await putSetting("currentYm", ym);
     await showView(app.currentView); // 表示中の画面を新しい年月で再描画
   },
 };
@@ -83,11 +82,21 @@ async function waitCv() {
   }
 }
 
+// 既定の対象年月: 毎月15日〜翌月14日を「その月」とする。
+// （前月の棚卸を月初に行う運用のため、例: 7月3日に開くと6月が対象になる）
+function defaultYmByRule(now = new Date()) {
+  let y = now.getFullYear();
+  let m = now.getMonth() + 1; // 1-12
+  if (now.getDate() < 15) {
+    m--;
+    if (m < 1) { m = 12; y--; }
+  }
+  return `${y}${String(m).padStart(2, "0")}`;
+}
+
 async function init() {
-  // 対象年月（前回の値 or 当月）
-  const now = new Date();
-  const defaultYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  app.ym = (await getSetting("currentYm", defaultYm)) || defaultYm;
+  // 対象年月は起動のたびにルールから算出（手動変更はそのセッション内でのみ有効）
+  app.ym = defaultYmByRule();
   $("ymInput").value = app.ym;
 
   // 年月バー

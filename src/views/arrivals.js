@@ -1,4 +1,4 @@
-// 入庫タブ。本部からの納品を日付ごとに記録する（旧 GUI_tool_4_enter_arrivals 相当）。
+// 入庫タブ。納品を日付ごとに記録する（旧 GUI_tool_4_enter_arrivals 相当）。
 // 日付を選ぶ → その日の商品×個数を縦表で入力、のシンプルな構成（iPadでも入力しやすい）。
 import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { daysInMonth, toInt } from "../validate.js";

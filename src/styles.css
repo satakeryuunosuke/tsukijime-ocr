@@ -149,7 +149,7 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .ym-bar label { color: #cbd5e1; font-size: .85rem; }
 .ym-bar input {
   padding: .4rem .5rem; border: none; border-radius: 6px; font-size: 1rem; font-weight: 700;
-  width: 6.5ch; text-align: center; font-variant-numeric: tabular-nums;
+  width: 5.2rem; text-align: center; font-variant-numeric: tabular-nums;
 }
 .ym-btn {
   background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px;
@@ -228,3 +228,16 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .row-active td { background: #f0f9ff; }
 
 select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
+
+/* ROIエディタ */
+.re-assign { display: flex; gap: 1rem; flex-wrap: wrap; }
+.re-canvas-wrap { flex: 1 1 560px; min-width: 320px; }
+.re-canvas { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; touch-action: none; }
+.re-side { flex: 1 1 260px; min-width: 240px; display: flex; flex-direction: column; gap: .5rem; }
+.re-current { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: .6rem .8rem; font-size: .9rem; }
+.re-progress { font-weight: 700; color: var(--primary-d); }
+.re-fields { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; font-size: .8rem; }
+.re-field { padding: .28rem .5rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.re-field:hover { background: #f0f9ff; }
+.re-field.current { background: #e0f2fe; font-weight: 700; }
+.re-field.done { color: var(--ok); }
