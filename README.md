@@ -1,20 +1,38 @@
-# グッズ交換票・AI読み取り（PWA版）
+# グッズ交換・月締めシステム（PWA）
 
-既存デスクトップ版（`AI_int_tsukijime_system`）の **AI文字認識と訂正機能**を、
-ブラウザ内で完結する PWA として切り出したもの。iPad Safari / Chrome の両方で
-**オフライン・端末内処理**で動作する（ハイブリッド構成の認識フロント）。
+塾のグッズ交換の**月締め（棚卸）業務がブラウザだけで完結する** PWA。
+旧Python製デスクトップ版の全機能（AI読み取り・集計・Excelレポート）に加え、
+商品入れ替え・交換票の生成印刷にも対応した。iPad Safari / Chrome の両方で
+**オフライン・端末内処理**で動作する。
+
+**運用者向けの説明は [HANDOVER.md](HANDOVER.md) を参照**（このREADMEは開発向け）。
 
 ## 対応機能
-- PDF アップロード（ドラッグ&ドロップ / ファイル選択、複数可）
-- PDF → 画像展開（PDF.js、Poppler不要）
-- AI 文字認識（OpenCV.js 前処理 + TensorFlow.js 推論）
+
+### 読み取り（AI-OCR）
+- PDF/画像アップロード → AI 文字認識（OpenCV.js 前処理 + TensorFlow.js 推論）
 - **検算・日付妥当性チェック**（商品単価×個数の合計を記入合計欄と照合／日付が月内か判定）
-- **訂正UI**：台形補正画像＋認識値のオーバーレイ表示、個数/日付/合計欄をライブ検算しながら編集
-- **マーカー検出失敗時の手動フォールバック**：生画像の四隅を4点タップ→台形補正→再認識→訂正
-- 読み取り結果 CSV ダウンロード（デスクトップ版の `recognition_results_*.csv` と同一列順）
+- **訂正UI**：台形補正画像＋認識値のオーバーレイ表示、ライブ検算しながら編集
+- **マーカー検出失敗時の救済**：パラメータ調整スライダー／四隅の手動タップ
+- ✓OK のページは対象年月の月データ（IndexedDB）へ自動保存
+
+### 月締め（棚卸）
+- **繰越在庫・入庫・ノート特別交換（現金/口座振替/ポイント）の入力画面**
+- 日次台帳の計算（繰越＋入庫−交換−特別交換、旧 template.xlsx の数式と同一）
+- **棚卸表**：帳簿残 vs 実棚数の突合・差異表示
+- **Excelレポート出力**（`report_YYYYMM.xlsx`、ExcelJSで動的生成）
+- 旧Python版互換のCSV5種（recognition_results / summary / carryover_inventory / arrival / other_manual_entries）
+
+### 商品マスタ・交換票
+- 商品の追加・削除・点数変更（バージョン管理。過去の月は当時のマスタで保持）
+- **交換票の生成・印刷**（A5横・四隅マーカー付き）。ROI座標は同一レイアウトモデルから自動導出されるため、商品入れ替え時の座標調整が不要
+
+### データ管理
+- 全データのJSON一括エクスポート/インポート（バックアップ・後任への引き継ぎ）
+- 月ごとのCSV一括ダウンロード
 - オフライン動作（Service Worker が全アセットをキャッシュ）
 
-集計・Excel生成・データ保存はデスクトップ版に残す（本アプリは認識・訂正とCSV出力に限定）。
+データはすべて端末内（IndexedDB）に保存され、サーバ送信は一切ない。
 
 ## セットアップ
 
@@ -44,17 +62,31 @@ python -m http.server 8778
 ※ Service Worker と PDF.js Worker のため file:// 直開きは不可。localhost か HTTPS が必要。
 
 ## デプロイ
-`tsukijime-ocr-pwa/` 一式を HTTPS の静的ホスティングに置くだけ。
-初回アクセスで全アセット（約14MB）がキャッシュされ、以降オフラインで起動する。
+リポジトリ一式を HTTPS の静的ホスティング（GitHub Pages）に置くだけ。
+初回アクセスで全アセット（約15MB）がキャッシュされ、以降オフラインで起動する。
 iPad は Safari の「ホーム画面に追加」でインストール可能。
+**デプロイ時は `sw.js` の CACHE バージョンを必ず上げる。**
 
 ## 構成
 ```
-index.html            アプリシェル
+index.html            アプリシェル（タブナビゲーション）
 manifest.json         PWA マニフェスト
 sw.js                 Service Worker（オフラインキャッシュ）
 src/
-  main.js             UI/ワークフロー制御
+  main.js             アプリシェル：ルーティング・対象年月・エンジン初期化・マスタシード
+  db.js               IndexedDB 保存層（months/masters/settings、一括エクスポート/インポート）
+  ledger.js           月次台帳の計算・旧Python版互換CSV5種の生成（純ロジック）
+  layout.js           交換票レイアウトモデル（ROI座標と印刷用HTMLを同一モデルから導出）
+  excelReport.js      Excel棚卸レポート生成（ExcelJS・動的生成）
+  views/
+    home.js           ホーム（進捗ダッシュボード）
+    reader.js         読み取りタブ（旧main.jsのOCRフロー＋月データ保存）
+    carryover.js      繰越在庫入力            ← GUI_tool_1_enter_carryover.py
+    arrivals.js       入庫入力                ← GUI_tool_4_enter_arrivals.py
+    specials.js       ノート特別交換入力       ← GUI_tool_3_enter_notes_cdp_hybrid.py
+    closing.js        月締め（棚卸表・実棚入力・レポート出力）← tool_5_create_report.py
+    masters.js        商品マスタ編集・交換票印刷
+    backup.js         データ管理（バックアップ・CSV一括）
   pdf.js              PDF→Canvas（PDF.js）
   markerDetector.js   四隅マーカー検出        ← marker_detector_E.py
   geometry.js         台形補正 1000x707       ← geometry_B.py
@@ -72,19 +104,32 @@ src/
   styles.css
 public/assets/
   model/              tfjs 変換済みモデル（model.json + *.bin）
-  vendor/             opencv.js / tf.min.js / pdf.min.js(+worker)
-  config.json         認識閾値（デスクトップ版と共有）
-  ROI_coordinate.csv  記入枠座標（デスクトップ版と共有）
-  product_list.csv    商品・単価・日本語名（デスクトップ版と共有）
+  vendor/             opencv.js / tf.min.js / pdf.min.js(+worker) / exceljs.min.js
+  config.json         認識閾値（初回シード用）
+  ROI_coordinate.csv  記入枠座標（初回シード用 → 以後は IndexedDB のマスタで管理）
+  product_list.csv    商品・単価・日本語名（初回シード用 → 同上）
   icon.png
 tools/                変換・検証スクリプト（配布不要）
 ```
 
+## データ設計（IndexedDB `tsukijime`）
+- `months`（key: `YYYYMM`）: `{ ym, masterVersion, pages[], carryover, arrivals, specials[], physicalCount, note }`
+  - `pages[]` は確定済み読み取り結果（predictions をそのまま保存）。同名ページは上書き。
+- `masters`（key: version）: `{ version, effectiveFrom, products[], roiRows[], config, layout }`
+  - 商品マスタはバージョン管理。月レコードは作成時点の版をスナップショットとして保持し、
+    月の途中でマスタが変わっても過去データが壊れない。
+  - 初回起動時に `public/assets/` のCSVから v1 を自動シード。
+- 交換票レイアウト: `layout.js` の単一モデルから ROI座標（認識用）と印刷HTML の両方を導出。
+  マーカー中心が補正後座標系 (0,0)-(1000,707) の四隅に対応。既定レイアウトは
+  現行 `ROI_coordinate.csv` を誤差0で再現することを確認済み。記入枠は2桁連結ボックスで
+  描画し（アスペクト比>1.3）、マーカー誤検出を防ぐ。
+
 ## モデル/設定の更新
 - モデル再学習時: `tools/CONVERT_MODEL.md` の手順で `.h5` → tfjs 変換し、
   `public/assets/model/` を差し替え、`sw.js` の CACHE 名を上げる。
-- ROI 座標・閾値変更時: `public/assets/ROI_coordinate.csv` / `config.json` を差し替え。
-  （デスクトップ版の `config/` と同じ内容を保つこと）
+- 商品・ROI座標の変更は**アプリの「商品・交換票」タブで行う**（新マスタバージョンとして保存）。
+  `public/assets/` のCSVは初回シード専用で、シード後の変更は既存端末には反映されない。
+- **デプロイの度に `sw.js` の CACHE バージョンを上げること**（忘れると更新が反映されない）。
 
 ## 検証状況（Python との一致）
 `tools/` の検証ページで、既存 Python パイプラインと実データ照合済み。
@@ -93,21 +138,24 @@ tools/                変換・検証スクリプト（配布不要）
 - Phase 2: 前処理 → 生JPG17枚で座標誤差0・補正画像差分0・予測不一致0（`PHASE2_RESULTS.md`）
 - Phase 3/4: 実PDF119ページを端点間処理し、CSV列順もデスクトップ版と一致。
 
-## 操作フロー
-1. 年月を確認（日付妥当性チェックに使用）し、PDF/画像を投入
+## 操作フロー（読み取りタブ）
+1. 画面上部の「対象年月」を確認（日付妥当性チェック・保存先の月に使用）し、PDF/画像を投入
 2. 一覧に各ページの状態が出る（✓OK / ⚠低信頼度 / ✗合計不一致 / ✗日付不正 / ✗マーカー失敗）
 3. 行をクリックで訂正モーダル：
    - マーカー成功ページ → 台形補正画像＋認識値を見ながら個数/日付/合計欄を修正、検算をライブ確認
    - マーカー失敗ページ → まず**パラメータ調整**（5スライダー＋二値化/検出プレビュー、Python版の
      Marker Tuner 相当）で緑枠が4つ付く設定にして自動検出。うまくいかなければ**四隅を手動タップ**。
      いずれも→再認識→同じ訂正画面
-4. 「保存」で確定（キャンセルは破棄）。CSV ダウンロードは確定済みページを出力
+4. ✓OK になったページは対象年月の月データへ自動保存される（同名ページは上書き）。
+   保存済みページの確認・削除は「月締め」タブから。
 
 ## 既知の制約 / TODO
 - **マーカー検出は約15%のページで自動検出に失敗**（デスクトップ版と同率のアルゴリズム固有特性）。
   → 訂正モーダルで「パラメータ調整（スライダー）」または「四隅手動タップ」で救済可能（実装済み）。
 - 検算NG・日付NG・低信頼度のページは一覧で色分け表示し、訂正モーダルで修正できる。
-- CSV に含まれるのは「認識成功＋手動確定」ページのみ（未処理のマーカー失敗ページは除外）。
+- 月データに保存されるのは「✓OK（認識成功＋確定）」ページのみ。
 - tfjs は決定性確保のため CPU バックエンド固定（WebGL は稀に誤読するため）。
-- 検算の連番（code_1/code_0）は日付ごとの処理順で採番。デスクトップ版のような
-  既存ファイルとの重複回避までは行わない。
+- 同じ交換票を別ファイル名で2回読み込むと二重集計になる（同名なら上書きで安全）。
+  スキャンファイル名の付け方を運用でそろえること（HANDOVER.md 参照）。
+- 生成した交換票での実運用前に「印刷 → スキャン → 読み取り」の一連を必ず一度検証すること。
+- Excelレポートは値のみ（数式なし）。見た目は旧 template.xlsx 準拠だが完全一致ではない。

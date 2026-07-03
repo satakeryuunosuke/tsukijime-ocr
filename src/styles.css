@@ -142,3 +142,89 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .rv-check { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; font-size: .9rem; margin: .5rem 0; }
 .rv-check > div { margin: .15rem 0; }
 .rv-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .75rem; }
+
+/* ---- アプリシェル（ヘッダー・ナビ・年月バー） ---- */
+.head-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.ym-bar { display: flex; align-items: center; gap: .4rem; }
+.ym-bar label { color: #cbd5e1; font-size: .85rem; }
+.ym-bar input {
+  padding: .4rem .5rem; border: none; border-radius: 6px; font-size: 1rem; font-weight: 700;
+  width: 6.5ch; text-align: center; font-variant-numeric: tabular-nums;
+}
+.ym-btn {
+  background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 6px;
+  width: 34px; height: 34px; font-size: .9rem; cursor: pointer;
+}
+.ym-btn:hover { background: rgba(255,255,255,.3); }
+.nav { display: flex; gap: .25rem; margin-top: .9rem; flex-wrap: wrap; }
+.nav a {
+  color: #cbd5e1; text-decoration: none; font-size: .88rem; font-weight: 600;
+  padding: .45rem .8rem; border-radius: 8px 8px 0 0;
+}
+.nav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+.nav a.active { background: var(--bg); color: var(--text); }
+
+.view-title { margin: .25rem 0 .35rem; font-size: 1.2rem; }
+.view-sub { color: var(--muted); font-size: .85rem; margin: .2rem 0 .8rem; }
+.muted { color: var(--muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.panel {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: .9rem 1.1rem; margin: 0 0 1rem;
+}
+.panel h3 { margin: .1rem 0 .5rem; font-size: 1rem; }
+.warn-panel { background: #fffbeb; border-color: #fde68a; font-size: .88rem; }
+.row-actions { display: flex; align-items: center; gap: .75rem; margin: .75rem 0 .25rem; flex-wrap: wrap; }
+.btn-secondary { background: #334155; }
+.btn-secondary:hover { background: #1e293b; }
+
+/* ホーム */
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; }
+.home-card {
+  display: block; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: .8rem 1rem; text-decoration: none; color: var(--text); transition: border-color .15s, box-shadow .15s;
+}
+.home-card:hover { border-color: var(--primary); box-shadow: 0 2px 10px rgba(14,165,233,.15); }
+.home-card.done { border-left: 5px solid var(--ok); }
+.hc-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.hc-title { font-weight: 700; font-size: .95rem; }
+.hc-status { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.home-card.done .hc-status { color: var(--ok); font-weight: 700; }
+.hc-desc { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
+.home-links { margin-top: 1rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.home-links a { color: var(--primary-d); font-size: .9rem; font-weight: 600; text-decoration: none; }
+
+/* 入力系テーブル（繰越・入庫・マスタ編集） */
+.entry-table {
+  border-collapse: collapse; background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; font-size: .9rem; margin: .5rem 0;
+}
+.entry-table th, .entry-table td { padding: .4rem .65rem; border-bottom: 1px solid var(--border); text-align: left; }
+.entry-table th { background: #f1f5f9; font-weight: 600; }
+.entry-table tr:last-child td { border-bottom: none; }
+.entry-table input[type="number"], .entry-table input:not([type]) {
+  padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem;
+}
+.entry-table input[type="number"] { width: 90px; text-align: right; }
+.entry-table tr:nth-child(even) td { background: #fafafa; }
+.mst-ops { white-space: nowrap; }
+
+/* 特別交換フォーム */
+.sp-form { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.sp-form select, .sp-note input { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
+.sp-methods { display: flex; gap: .8rem; padding-bottom: .3rem; }
+.sp-radio { font-size: .9rem; font-weight: 600; }
+.sp-notes { display: flex; gap: .6rem; flex-wrap: wrap; }
+.sp-note { display: flex; flex-direction: column; font-size: .78rem; color: var(--muted); gap: .2rem; }
+.sp-note input { width: 70px; text-align: right; }
+
+/* 月締め */
+.table-scroll { overflow-x: auto; }
+.stocktake input { width: 72px; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; text-align: right; }
+.stocktake td, .stocktake th { white-space: nowrap; }
+.result-table.narrow { width: auto; min-width: 380px; }
+.lg-detail { color: var(--primary-d); font-weight: 600; text-decoration: none; }
+.row-active td { background: #f0f9ff; }
+
+select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }

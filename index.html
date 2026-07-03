@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>グッズ交換票・AI読み取り</title>
+  <title>グッズ交換・月締めシステム</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0f172a" />
   <link rel="apple-touch-icon" href="public/assets/icon.png" />
@@ -11,41 +11,84 @@
 </head>
 <body>
   <header>
-    <h1>グッズ交換票・AI読み取り</h1>
-    <p class="sub">交換票PDF / 画像から数値を自動読み取り、検算・訂正してCSVを出力します（オフライン・端末内処理）</p>
+    <div class="head-row">
+      <div>
+        <h1>グッズ交換・月締めシステム</h1>
+        <p class="sub">交換票の読み取りから棚卸・レポート出力までブラウザで完結（オフライン・端末内処理）</p>
+      </div>
+      <div class="ym-bar">
+        <button id="ymPrev" class="ym-btn" title="前の月">◀</button>
+        <label>対象年月 <input id="ymInput" type="text" inputmode="numeric" placeholder="202607" size="7" maxlength="6" /></label>
+        <button id="ymNext" class="ym-btn" title="次の月">▶</button>
+      </div>
+    </div>
+    <nav id="nav" class="nav">
+      <a href="#home" data-view="home">ホーム</a>
+      <a href="#reader" data-view="reader">読み取り</a>
+      <a href="#carryover" data-view="carryover">繰越在庫</a>
+      <a href="#arrivals" data-view="arrivals">入庫</a>
+      <a href="#specials" data-view="specials">特別交換</a>
+      <a href="#closing" data-view="closing">月締め</a>
+      <a href="#masters" data-view="masters">商品・交換票</a>
+      <a href="#backup" data-view="backup">データ管理</a>
+    </nav>
   </header>
 
   <main>
-    <section id="dropzone" class="dropzone">
-      <p class="dz-title">PDF または 画像をドラッグ＆ドロップ</p>
-      <p class="dz-or">または</p>
-      <label class="btn">
-        ファイルを選択
-        <input id="fileInput" type="file" accept="application/pdf,image/*" multiple disabled hidden />
-      </label>
-      <p id="status" class="status">読み込み中…</p>
-    </section>
+    <!-- ホーム -->
+    <section id="view-home" class="view" hidden></section>
 
-    <div id="progressWrap" class="progress-wrap" hidden>
-      <div id="progressBar" class="progress-bar"></div>
-    </div>
+    <!-- 読み取り（AI-OCR） -->
+    <section id="view-reader" class="view" hidden>
+      <section id="dropzone" class="dropzone">
+        <p class="dz-title">交換票の PDF または 画像をドラッグ＆ドロップ</p>
+        <p class="dz-or">または</p>
+        <label class="btn">
+          ファイルを選択
+          <input id="fileInput" type="file" accept="application/pdf,image/*" multiple disabled hidden />
+        </label>
+        <p id="status" class="status">読み込み中…</p>
+      </section>
 
-    <section id="results" class="results" hidden>
-      <div class="results-head">
-        <div id="summary" class="summary"></div>
-        <div class="dl">
-          <label>年月 <input id="ymInput" type="text" placeholder="202606" size="8" /></label>
-          <button id="downloadBtn" class="btn" disabled>CSV ダウンロード</button>
-          <button id="downloadAggBtn" class="btn" disabled>日別集計CSV ダウンロード</button>
-        </div>
+      <div id="progressWrap" class="progress-wrap" hidden>
+        <div id="progressBar" class="progress-bar"></div>
       </div>
-      <table class="result-table">
-        <thead>
-          <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>
-        </thead>
-        <tbody id="resultBody"></tbody>
-      </table>
+
+      <section id="results" class="results" hidden>
+        <div class="results-head">
+          <div id="summary" class="summary"></div>
+          <div class="dl">
+            <button id="downloadBtn" class="btn" disabled>CSV ダウンロード</button>
+            <button id="downloadAggBtn" class="btn" disabled>日別集計CSV</button>
+          </div>
+        </div>
+        <p id="savedInfo" class="status"></p>
+        <table class="result-table">
+          <thead>
+            <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>
+          </thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </section>
     </section>
+
+    <!-- 繰越在庫 -->
+    <section id="view-carryover" class="view" hidden></section>
+
+    <!-- 入庫 -->
+    <section id="view-arrivals" class="view" hidden></section>
+
+    <!-- ノート特別交換 -->
+    <section id="view-specials" class="view" hidden></section>
+
+    <!-- 月締め -->
+    <section id="view-closing" class="view" hidden></section>
+
+    <!-- 商品マスタ・交換票 -->
+    <section id="view-masters" class="view" hidden></section>
+
+    <!-- データ管理 -->
+    <section id="view-backup" class="view" hidden></section>
   </main>
 
   <!-- ライブラリ（ローカル同梱・オフライン動作） -->
