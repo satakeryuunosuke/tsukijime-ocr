@@ -29,30 +29,21 @@ async function applyAdjustment() {
   if (!month.physicalCount) { alert("先に実棚数を入力・保存してください。"); return; }
 
   const day = toInt(el().querySelector("#adjDay").value) || daysInMonth(app.ym);
-  const { shortages, surpluses } = computeDiffs(month, products);
+  const { shortages } = computeDiffs(month, products);
   const nShort = Object.keys(shortages).length;
-  const nSurp = Object.keys(surpluses).length;
-  if (!nShort && !nSurp) { alert("差異はありません。"); return; }
+  // 余剰（実棚 > 帳簿残）は隠し在庫として帳簿に載せない。不足のみ交換記録で解消する。
+  if (!nShort) { alert("交換記録で解消すべき不足はありません。"); return; }
 
   const nameOf = (k) => (products.find((p) => p.key === k) || { name: k }).name;
-  const lines = [];
-  if (nShort) lines.push("【不足 → 交換記録を作成】\n" +
-    Object.entries(shortages).map(([k, q]) => `  ${nameOf(k)} × ${q}`).join("\n"));
-  if (nSurp) lines.push(`【余剰 → ${day}日の入庫に加算】\n` +
-    Object.entries(surpluses).map(([k, q]) => `  ${nameOf(k)} × ${q}`).join("\n"));
+  const detail = Object.entries(shortages).map(([k, q]) => `  ${nameOf(k)} × ${q}`).join("\n");
   if (!window.confirm(
-    `帳簿を実棚数に合わせるため、次の調整記録を作成します（${day}日付け）。\n\n${lines.join("\n")}\n\n` +
-    `作成後は差異が 0 になります。よろしいですか？`)) return;
+    `帳簿在庫が実棚数より多い商品について、差の分だけ交換記録を作成します（${day}日付け）。\n\n` +
+    `【交換記録を作成】\n${detail}\n\n` +
+    `※ 実棚数が帳簿より多い（余剰）商品は帳簿に載せません（そのまま保管）。\n` +
+    `よろしいですか？`)) return;
 
-  if (nShort) {
-    const existing = new Set(month.pages.map((p) => p.name));
-    month.pages.push(...buildAdjustmentPages(shortages, products, day, existing));
-  }
-  if (nSurp) {
-    const a = month.arrivals[day] || {};
-    for (const [k, q] of Object.entries(surpluses)) a[k] = toInt(a[k]) + q;
-    month.arrivals[day] = a;
-  }
+  const existing = new Set(month.pages.map((p) => p.name));
+  month.pages.push(...buildAdjustmentPages(shortages, products, day, existing));
   await putMonth(month);
   await show();
 }
@@ -119,17 +110,20 @@ function detailTable(products, ledger) {
     </div>`;
 }
 
-// 差異がある場合のみ表示する調整パネル
+// 不足（帳簿 > 実棚）がある場合のみ表示する調整パネル。
+// 余剰（実棚 > 帳簿）は隠し在庫として帳簿に載せないため、調整の対象外。
 function adjustPanel(month, products) {
   if (!month.physicalCount) return "";
   const { shortages, surpluses } = computeDiffs(month, products);
-  if (!Object.keys(shortages).length && !Object.keys(surpluses).length) return "";
+  const nShort = Object.keys(shortages).length;
+  const nSurp = Object.keys(surpluses).length;
+  if (!nShort && !nSurp) return "";
   const maxDays = daysInMonth(month.ym);
-  return `
-    <div class="panel warn-panel">
-      <h3>差異の調整</h3>
-      <p class="view-sub">帳簿を実棚数に合わせます。不足分は交換記録（通常の交換票と同じ形式）として、
-      余剰分は入庫記録として作成されるため、集計・CSV・Excel上は通常の記録と区別されません。</p>
+  const surpNote = nSurp
+    ? `<p class="view-sub">余剰（実棚が帳簿より多い）商品が ${nSurp} 件あります。これらは帳簿に載せず、そのまま保管します（調整しません）。</p>`
+    : "";
+  const shortBlock = nShort ? `
+      <p class="view-sub">帳簿在庫が実棚数より多い分だけ交換記録（通常の交換票と同じ形式）を作成し、帳簿を実棚に合わせます。集計・CSV・Excel上は通常の記録と区別されません。</p>
       <div class="row-actions">
         <label>記録する日付
           <select id="adjDay">
@@ -137,8 +131,13 @@ function adjustPanel(month, products) {
               `<option value="${d}" ${d === maxDays ? "selected" : ""}>${d}日</option>`).join("")}
           </select>
         </label>
-        <button id="adjApply" class="btn">差異を調整記録で解消する</button>
-      </div>
+        <button id="adjApply" class="btn">不足分の交換記録を作成する</button>
+      </div>` : "";
+  return `
+    <div class="panel warn-panel">
+      <h3>差異の調整</h3>
+      ${surpNote}
+      ${shortBlock}
     </div>`;
 }
 
