@@ -119,12 +119,16 @@ function denomTablePanel(month, salesByDay) {
       </div>`;
   }
   const table = buildDailyDenomTable(app.ym, cash.opening, cash.closing, salesByDay);
-  const warn = table.consistent ? "" :
-    `<p class="err">⚠ 月初＋売上と月末の金額が一致していないため、最終営業日に差額を含めて調整した表になっています。先に上のチェックの原因を解消してください。</p>`;
+  let warn = "";
+  if (!table.consistent) {
+    warn = `<p class="err">⚠ 月初＋売上と月末の金額が一致していないため、月の最終日に差額を含めて帳尻を合わせた表になっています。先に上のチェックの原因を解消してください。</p>`;
+  } else if (table.residualAdjusted) {
+    warn = `<p class="err">⚠ 現金売上が無い（または少ない）のに金種の構成が変わっているため、説明のつかない増減を月の最終日にまとめて反映しています。枚数の入力を確認してください。</p>`;
+  }
   return `
     <div class="panel">
       <h3>本部報告用・日別金種表</h3>
-      <p class="view-sub">月初の金種と日々の現金売上から、つじつまの合う毎日の金種枚数を自動で補間した表です（売上のない日は前日と同じ。金種の入れ替わりは最終営業日に両替として反映）。そのまま報告書に転記できます。</p>
+      <p class="view-sub">月初の金種と日々の現金売上から、つじつまの合う毎日の金種枚数を自動で補間した表です。金種の増減は「お客さんがどの金種で支払い、どの金種でお釣りを渡したか」として売上のあった日に割り当てます（例: 千円札が増えていれば千円札で支払われ、お釣りを渡したことになります）。売上のない日は変動しません。そのまま報告書に転記できます。</p>
       ${warn}
       <div class="table-scroll">
         <table class="result-table narrow cash-daily">

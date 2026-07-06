@@ -48,71 +48,153 @@ export function unpricedCashKeys(month, products, prices) {
   return [...keys];
 }
 
-// 金額を金種に貪欲分解して counts に加算した新しいオブジェクトを返す
-function addGreedy(counts, amount) {
-  const out = { ...counts };
-  let rest = amount;
-  for (const d of PAY_DENOMS) {
-    const n = Math.floor(rest / d);
-    if (n > 0) { out[d] = toInt(out[d]) + n; rest -= n * d; }
-  }
-  return out;
-}
-
 function normalize(counts) {
   const out = {};
   for (const d of DENOMS) out[d] = toInt(counts && counts[d]);
   return out;
 }
 
+// 金額を金種に貪欲分解（在庫制限なし）。1円玉があるので必ず割り切れる。
+function greedyNew(amount) {
+  const out = {};
+  let rest = amount;
+  for (const d of PAY_DENOMS) {
+    const n = Math.floor(rest / d);
+    if (n > 0) { out[d] = n; rest -= n * d; }
+  }
+  return out;
+}
+
+// avail の範囲で amount をちょうど分解できれば返す。できなければ null。
+function exactFit(amount, avail) {
+  const out = {};
+  let rest = amount;
+  for (const d of DENOMS) {
+    const n = Math.min(toInt(avail[d]), Math.floor(rest / d));
+    if (n > 0) { out[d] = n; rest -= n * d; }
+  }
+  return rest === 0 ? out : null;
+}
+
+// 支払い（受け取る金種）を決める。「月末までに増えるべき金種」= availPay から充当する。
+//   1. ちょうどの支払いができればそれを採用
+//   2. できなければ「金額以上の最小の1枚」（例: 440円に千円札）→ お釣りを渡す想定
+//   3. それも無ければ大きい順に足していく
+// availPay で金額に届かなければ null。
+function pickPayment(amount, availPay) {
+  const exact = exactFit(amount, availPay);
+  if (exact) return exact;
+  const single = [...DENOMS].reverse().find((d) => d >= amount && toInt(availPay[d]) > 0);
+  if (single) return { [single]: 1 };
+  const out = {};
+  let total = 0;
+  for (const d of DENOMS) {
+    let n = toInt(availPay[d]);
+    while (n > 0 && total < amount) { out[d] = toInt(out[d]) + 1; total += d; n--; }
+    if (total >= amount) return out;
+  }
+  return null;
+}
+
+// お釣り（渡す金種）を決める。「月末までに減るべき金種」を優先し、
+// 足りない分は手元（cur）から出す。手元でお釣りが作れなければ null。
+function pickChange(amount, R, cur) {
+  const out = {};
+  let rest = amount;
+  // 第1候補: 減るべき金種（R < 0）。ただし手元にある枚数まで。
+  for (const d of DENOMS) {
+    const avail = Math.min(Math.max(-toInt(R[d]), 0), toInt(cur[d]));
+    const n = Math.min(avail, Math.floor(rest / d));
+    if (n > 0) { out[d] = n; rest -= n * d; }
+  }
+  // 第2候補: 手元の残り
+  for (const d of DENOMS) {
+    if (rest <= 0) break;
+    const avail = toInt(cur[d]) - toInt(out[d]);
+    const n = Math.min(avail, Math.floor(rest / d));
+    if (n > 0) { out[d] = toInt(out[d]) + n; rest -= n * d; }
+  }
+  return rest === 0 ? out : null;
+}
+
 // 本部報告用の日別金種表を補間生成する。
 // opening/closing: {denom: count}、salesByDay: Map(day -> 円)。
-// 考え方:
-//   1. 月初から前進シミュレーション（売上日はその金額を金種分解して加算＝ちょうどの支払いを仮定）
-//   2. シミュレーション最終値と実際の月末構成の差（両替相当）を「最後の売上日」以降に反映
-//      → 各日の金額増分は必ずその日の売上と一致し、月末は入力どおりの構成で終わる
-// 月初+売上と月末金額が一致しない場合も表は生成する（最終日で差額ごと調整）が、
-// consistent=false を返すので呼び出し側で警告を出すこと。
-// 返り値: { rows: [{ day(0=月初), counts, total, sales }], consistent, expectedClosing }
+// 金種の増減はすべて「客の支払い」と「お釣り」で説明できる形で割り当てる（両替は行わない）:
+//   - 月末までに増えるべき金種は売上日の支払いとして受け取ったことに、
+//     減るべき金種はお釣りとして渡したことにする。
+//   - 最後の売上日には残りの増減をすべて割り当てる（金額が一致していれば
+//     その日の売上額とちょうど一致することが保証される）。
+//   - 売上のない日は一切変動しない。各日の金額増分は必ずその日の売上と一致する。
+// 月初+売上と月末金額が一致しない場合（consistent=false）や、売上が無いのに構成が
+// 変わっている場合（residualAdjusted=true）も表は生成するが、月の最終日で帳尻を
+// 合わせるため、呼び出し側で警告を出すこと。
+// 返り値: { rows: [{ day(0=月初), counts, total, sales }], consistent, residualAdjusted, expectedClosing }
 export function buildDailyDenomTable(ym, opening, closing, salesByDay) {
   const maxDays = daysInMonth(ym);
   const open = normalize(opening);
   const close = normalize(closing);
 
-  // 前進シミュレーション
-  const sim = [open];
-  let cur = open;
-  let lastSalesDay = 0;
-  for (let d = 1; d <= maxDays; d++) {
-    const s = salesByDay.get(d) || 0;
-    if (s > 0) { cur = addGreedy(cur, s); lastSalesDay = d; }
-    sim.push(cur);
-  }
-
-  // 月末実測との構成差。金額が一致していれば差の合計金額は0（＝両替扱い）。
-  const diff = {};
-  for (const d of DENOMS) diff[d] = close[d] - toInt(sim[maxDays][d]);
-  const adjustDay = lastSalesDay || maxDays;
-
   const totalSales = [...salesByDay.values()].reduce((a, b) => a + b, 0);
   const expectedClosing = cashTotal(open) + totalSales;
   const consistent = expectedClosing === cashTotal(close);
 
-  const rows = [];
-  for (let d = 0; d <= maxDays; d++) {
-    let counts = sim[d];
-    if (d >= adjustDay) {
-      counts = { ...counts };
-      for (const dn of DENOMS) counts[dn] = toInt(counts[dn]) + diff[dn];
+  // R: 月末までに増減すべき枚数（月末 − 現在）。日々の割り当てで消し込んでいく。
+  const R = {};
+  for (const d of DENOMS) R[d] = close[d] - open[d];
+  const salesDays = [...salesByDay.keys()].filter((d) => salesByDay.get(d) > 0).sort((a, b) => a - b);
+  const lastSalesDay = consistent ? salesDays[salesDays.length - 1] : undefined;
+
+  const cur = { ...open };
+  const rows = [{ day: 0, counts: { ...cur }, total: cashTotal(cur), sales: 0 }];
+  let residualAdjusted = false;
+
+  const applyDelta = (delta, sign) => {
+    for (const [d, n] of Object.entries(delta)) {
+      cur[d] = toInt(cur[d]) + sign * n;
+      R[d] = toInt(R[d]) - sign * n;
     }
-    rows.push({
-      day: d,
-      counts: normalize(counts),
-      total: cashTotal(counts),
-      sales: d === 0 ? 0 : (salesByDay.get(d) || 0),
-    });
+  };
+
+  for (let day = 1; day <= maxDays; day++) {
+    const S = salesByDay.get(day) || 0;
+    if (S > 0) {
+      if (day === lastSalesDay) {
+        // 最後の売上日: 残りの増減をすべてこの日の支払い/お釣りとして割り当てる。
+        // consistent なら value(R) はこの日の売上額に一致し、月末構成にぴったり着地する。
+        for (const d of DENOMS) {
+          cur[d] = toInt(cur[d]) + toInt(R[d]);
+          R[d] = 0;
+        }
+      } else {
+        const availPay = {};
+        for (const d of DENOMS) availPay[d] = Math.max(toInt(R[d]), 0);
+        let pay = pickPayment(S, availPay);
+        let change = null;
+        if (pay) {
+          const c = cashTotal(pay) - S;
+          change = c === 0 ? {} : pickChange(c, R, cur);
+        }
+        if (!pay || !change) {
+          // 割り当て不能（お釣りが作れない等）→ ちょうどの支払いを新規金種で受領。
+          // ズレた分は以降の日（最終的には最後の売上日）が自動的に吸収する。
+          pay = greedyNew(S);
+          change = {};
+        }
+        applyDelta(pay, +1);
+        applyDelta(change, -1);
+      }
+    }
+    if (day === maxDays) {
+      // 消し込めなかった増減（金額不一致・売上が無いのに構成が変わった等）は
+      // 最終日で帳尻を合わせ、表は必ず入力された月末構成で終わらせる。
+      // 通常の consistent なケースでは最後の売上日で R=0 になっているため何もしない。
+      for (const d of DENOMS) {
+        if (R[d] !== 0) { residualAdjusted = true; cur[d] = toInt(cur[d]) + toInt(R[d]); R[d] = 0; }
+      }
+    }
+    rows.push({ day, counts: { ...cur }, total: cashTotal(cur), sales: S });
   }
-  return { rows, consistent, expectedClosing };
+  return { rows, consistent, residualAdjusted, expectedClosing };
 }
 
 // 日別金種表 → CSV（本部報告の転記用）
