@@ -4,6 +4,7 @@ import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { computeLedger, computeDiffs, buildAdjustmentPages } from "../ledger.js";
 import { toInt, computeTotalScore, daysInMonth } from "../validate.js";
 import { downloadReport } from "../excelReport.js";
+import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from "../reorder.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -141,6 +142,59 @@ function adjustPanel(month, products) {
     </div>`;
 }
 
+// 発注のめやすパネル。現在庫（実棚数。未保存なら帳簿残）が
+// 「月平均払出 × STOCK_MONTHS か月分」を下回る商品と、その発注数を知らせる。
+function reorderPanel(month, products, ledger, avgInfo) {
+  const { avg, monthsUsed } = avgInfo;
+  const fmtYm = (ym) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4), 10)}月`;
+  if (!monthsUsed.length) {
+    return `
+      <div class="panel">
+        <h3>発注のめやす</h3>
+        <p class="view-sub">払出の実績がまだないため計算できません（交換票の読み取りやノート購入を記録すると、翌月から表示されます）。</p>
+      </div>`;
+  }
+  const usePhys = !!month.physicalCount;
+  const stock = usePhys
+    ? Object.fromEntries(products.map((p) => [p.key, toInt(month.physicalCount[p.key])]))
+    : ledger.closing;
+  const rows = buildReorderSuggestions(products, stock, avg);
+  const toOrder = rows.filter((r) => r.order > 0);
+  const noHistory = rows.filter((r) => r.noHistory);
+  const fmtAvg = (a) => (a % 1 ? a.toFixed(1) : String(a));
+  const basisNote =
+    `基準: 在庫が「月平均払出 × ${STOCK_MONTHS}か月分」を下回ったら、その分だけ発注。` +
+    `月平均は ${[...monthsUsed].reverse().map(fmtYm).join("・")} の実績から計算。` +
+    `現在庫は${usePhys ? "保存済みの実棚数" : "帳簿残（実棚数を保存すると実棚数）"}を使用。`;
+  const body = toOrder.length ? `
+      <div class="table-scroll">
+        <table class="result-table narrow">
+          <thead><tr><th>商品</th><th>現在庫</th><th>月平均払出</th><th>${STOCK_MONTHS}か月分のめやす</th><th>発注数</th></tr></thead>
+          <tbody>
+            ${toOrder.map((r) => `
+              <tr>
+                <td>${r.name}</td>
+                <td class="num">${r.stock}</td>
+                <td class="num">${fmtAvg(r.avg)}</td>
+                <td class="num">${r.target}</td>
+                <td class="num"><b class="err">${r.order}</b></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`
+    : `<p class="view-sub ok">✓ すべての商品に${STOCK_MONTHS}か月分の在庫があります。発注が必要な商品はありません。</p>`;
+  const noHistoryNote = noHistory.length
+    ? `<p class="view-sub">実績がなく計算できない商品: ${noHistory.map((r) => r.name).join("・")}</p>`
+    : "";
+  return `
+    <div class="panel">
+      <h3>発注のめやす${toOrder.length ? `（${toOrder.length}商品）` : ""}</h3>
+      ${body}
+      ${noHistoryNote}
+      <p class="view-sub">${basisNote}</p>
+    </div>`;
+}
+
 function pagesPanel(month, products) {
   if (!showPages) {
     return `<button id="clTogglePages" class="btn-sub">保存済みページ一覧を表示（${month.pages.length}枚）</button>`;
@@ -174,6 +228,7 @@ export async function show() {
   const master = await getMaster(month.masterVersion);
   const products = master.products;
   const ledger = computeLedger(month, products);
+  const avgInfo = await collectAverageConsumption(app.ym);
   const y = app.ym.slice(0, 4), m = parseInt(app.ym.slice(4), 10);
 
   const warns = [];
@@ -198,6 +253,7 @@ export async function show() {
       </div>
     </div>
     ${adjustPanel(month, products)}
+    ${reorderPanel(month, products, ledger, avgInfo)}
     ${detailTable(products, ledger)}
     <div class="panel">
       <h3>保存済みの交換票</h3>

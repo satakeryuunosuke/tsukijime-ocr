@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8779"],
       "port": 8779
+    },
+    {
+      "name": "tsukijime-pwa-alt",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8781"],
+      "port": 8781
     }
   ]
 }
