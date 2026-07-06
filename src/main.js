@@ -9,6 +9,7 @@ import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
 import * as arrivals from "./views/arrivals.js";
 import * as specials from "./views/specials.js";
+import * as cash from "./views/cash.js";
 import * as closing from "./views/closing.js";
 import * as masters from "./views/masters.js";
 import * as backup from "./views/backup.js";
@@ -16,7 +17,7 @@ import * as backup from "./views/backup.js";
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
 
-const VIEWS = { home, reader, carryover, arrivals, specials, closing, masters, backup };
+const VIEWS = { home, reader, carryover, arrivals, specials, cash, closing, masters, backup };
 
 export const app = {
   ym: null,        // 対象年月 'YYYYMM'（全タブ共通）

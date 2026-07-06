@@ -239,7 +239,10 @@ function editMode(body, page, rawCanvas, ctx, close) {
 
   body.innerHTML = `
     <div class="rv-edit">
-      <div class="rv-img"><canvas class="rv-disp"></canvas></div>
+      <div class="rv-img">
+        <div class="rv-img-tools"><button class="btn-sub rv-raw-toggle">元のスキャン画像を表示</button></div>
+        <canvas class="rv-disp"></canvas>
+      </div>
       <div class="rv-form">
         <div class="rv-field rv-date">
           <label>日付（日）</label>
@@ -264,11 +267,36 @@ function editMode(body, page, rawCanvas, ctx, close) {
   // 編集はクローンに対して行い、保存時のみ page.predictions へ反映（キャンセルで破棄）
   const P = { ...page.predictions };
 
+  // 補正後画像 ⇔ 生画像（切り取り前）の表示切替。
+  // 切り取り（台形補正）が疑わしいとき、元のスキャンとマーカー位置（赤点）を確認できる。
+  let showRaw = false;
+  let lastSelected = null;
+  const rawToggle = body.querySelector(".rv-raw-toggle");
+  rawToggle.onclick = () => {
+    showRaw = !showRaw;
+    rawToggle.textContent = showRaw ? "補正後の画像に戻す" : "元のスキャン画像を表示";
+    redraw(lastSelected);
+  };
+
   const redraw = (selected) => {
-    disp.width = tCanvas.width;
-    disp.height = tCanvas.height;
-    disp.getContext("2d").drawImage(tCanvas, 0, 0);
-    drawOverlay(disp, ctx.roiRows, P, selected);
+    lastSelected = selected;
+    const base = showRaw ? rawCanvas : tCanvas;
+    disp.width = base.width;
+    disp.height = base.height;
+    const g = disp.getContext("2d");
+    g.drawImage(base, 0, 0);
+    if (showRaw) {
+      // 生画像には切り取りに使った4点を表示（枠の位置ズレの確認用）
+      if (page.coords) {
+        g.strokeStyle = "#dc2626"; g.fillStyle = "#dc2626"; g.lineWidth = 3;
+        g.beginPath();
+        page.coords.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+        g.closePath(); g.stroke();
+        for (const p of page.coords) { g.beginPath(); g.arc(p[0], p[1], 10, 0, Math.PI * 2); g.fill(); }
+      }
+    } else {
+      drawOverlay(disp, ctx.roiRows, P, selected);
+    }
   };
 
   // 桁分解ヘルパ（空の上位桁は "" にして OCR 表現と揃える）

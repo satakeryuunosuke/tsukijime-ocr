@@ -24,6 +24,7 @@ export async function show() {
   const carryoverDone = month.carryover !== null;
   const arrivalDays = Object.keys(month.arrivals || {}).length;
   const specialsN = (month.specials || []).length;
+  const cashDone = !!(month.cash && month.cash.closing);
   const physDone = month.physicalCount !== null;
 
   el().innerHTML = `
@@ -38,7 +39,9 @@ export async function show() {
         arrivalDays > 0, "グッズが届いたら日付ごとに個数を記録します。")}
       ${card("specials", "4. ノート購入", specialsN ? `${specialsN} 件` : "0 件",
         specialsN > 0, "現金・口座振替・栄冠ポイントでのノート購入を手入力します。")}
-      ${card("closing", "5. 月締め（棚卸）", physDone ? "実棚入力済み ✓" : "未実施",
+      ${card("cash", "5. 現金管理", cashDone ? "月末現金入力済み ✓" : "未入力",
+        cashDone, "月末に金庫の現金を数えて入力すると、ノートの現金売上とのつじつまを自動チェックします。本部報告用の日別金種表も作れます。")}
+      ${card("closing", "6. 月締め（棚卸）", physDone ? "実棚入力済み ✓" : "未実施",
         physDone, "日別台帳と月末の帳簿残を確認し、実際の在庫数と突き合わせてExcelレポートを出力します。")}
     </div>
     <div class="home-links">

@@ -241,3 +241,12 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
 .re-field:hover { background: #f0f9ff; }
 .re-field.current { background: #e0f2fe; font-weight: 700; }
 .re-field.done { color: var(--ok); }
+
+/* 現金管理 */
+.cash-denoms input { width: 90px; }
+.cash-daily td, .cash-daily th { white-space: nowrap; font-size: .82rem; padding: .3rem .5rem; }
+.cash-sale-day td { background: #f0f9ff; }
+.cash-verdict { font-size: 1rem; font-weight: 600; margin: .6rem 0 0; }
+
+/* 訂正モーダル: 生画像切替 */
+.rv-img-tools { margin-bottom: .4rem; }

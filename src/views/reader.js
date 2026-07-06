@@ -68,6 +68,8 @@ function statusHtml(page) {
   if (v.dateOk === false) return `<span class="err">✗ 日付不正（要確認）</span>`;
   if (page.lowConfidence && page.lowConfidence.length)
     return `<span class="warn">⚠ 低信頼度: ${page.lowConfidence.join(", ")}</span>`;
+  if (page.autoTuned)
+    return `<span class="ok">✓ OK（マーカー自動補正）</span>`;
   return `<span class="ok">✓ OK</span>`;
 }
 
@@ -160,6 +162,7 @@ async function processAll(ctx) {
     }
     page.ok = res.ok;
     page.coords = res.coords || null;
+    page.autoTuned = !!res.autoTuned;
     page.predictions = res.predictions || {};
     page.lowConfidence = res.lowConfidence || [];
     page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays) : null;
