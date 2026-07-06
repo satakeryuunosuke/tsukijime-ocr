@@ -1,19 +1,27 @@
 // 商品マスタ・交換票タブ。
-// - 商品の追加・削除・名称/点数変更（保存すると新しいマスタバージョンを作成）
-// - 交換票の印刷（レイアウトモデルから生成。ROI座標も同じモデルから自動導出）
+// 交換票は Excel（.xlsx）に一本化: マスタに票ファイルを保存し、ダウンロード → Excelで編集 →
+// アップロードすると、マーカー（黒塗り2×2セル）と罫線から記入枠を自動抽出・自動割り当てして
+// ROI座標を設定する（A4に2票の構成に対応。上の票を使用）。
+// 予備として、印刷物のスキャンから設定する方法（ROIエディタ）も残している。
 import {
   ensureMonth, putMonth, getMaster, getAllMasters, getAllMonths, nextMasterVersion, putMaster,
 } from "../db.js";
-import { defaultLayout, maxSlots, roiRowsFromLayout, formDocumentHtml } from "../layout.js";
-import { openRoiEditor } from "../roiEditor.js";
+import { openRoiEditor, openAssignSession } from "../roiEditor.js";
+import { parseFormXlsx, autoAssign, schematicCanvas, insetRoi } from "../xlsxForm.js";
 import { downloadCsv } from "../csv.js";
 import { toInt } from "../validate.js";
 
+const ASSETS = "public/assets/";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 let app = null;
-let editing = false;     // 編集フォームの表示中か
-let draft = null;        // 編集中の商品リスト [{key,name,points,isNew}]
+let editing = false;       // 編集フォームの表示中か
+let draft = null;          // 編集中の商品リスト [{key,name,points,isNew}]
 let draftEffective = null; // 編集中の適用開始月（再描画で消えないよう保持）
-let draftRoiRows = null;   // ROIエディタで設定した座標（未設定なら既定レイアウトを使用）
+let draftRoiRows = null;   // 設定済みのROI座標（null なら未設定）
+let draftRoiSource = null; // 'xlsx' | 'scan'
+let draftFormB64 = null;   // アップロードされた交換票（base64）
+let draftFormName = null;
 const el = () => document.getElementById("view-masters");
 
 function nextYm(ym) {
@@ -32,23 +40,49 @@ function monthHasData(m) {
 // 一度使ったIDは繰越の自動引き継ぎ等で月をまたいで参照されるため、既存商品のIDは変更不可。
 const KEY_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-async function openPrintWindow() {
-  const month = await ensureMonth(app.ym);
-  const master = await getMaster(month.masterVersion);
-  if (master.roiSource === "scan" && !window.confirm(
-    "このマスタは自作の交換票（スキャンから座標設定）用です。\n" +
-    "アプリが生成する票とは配置が異なるため、印刷しても読み取りには使えません。\n参考として表示しますか？")) return;
-  const layout = master.layout || defaultLayout();
-  const w = window.open("", "_blank");
-  if (!w) { alert("ポップアップがブロックされました。許可してください。"); return; }
-  w.document.write(formDocumentHtml(layout, master.products));
-  w.document.close();
+// ---- base64 ヘルパー（IndexedDBのJSONエクスポートに乗せるため文字列で保持）----
+function bufToB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function b64ToBlob(b64, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// マスタの交換票（Excel）をダウンロード。v1 は同梱アセットにフォールバック。
+async function downloadFormXlsx(master) {
+  if (master.formXlsxB64) {
+    downloadBlob(b64ToBlob(master.formXlsxB64, XLSX_MIME), master.formXlsxName || `交換用紙_v${master.version}.xlsx`);
+    return;
+  }
+  try {
+    const resp = await fetch(ASSETS + "exchange_form.xlsx");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    downloadBlob(await resp.blob(), `交換用紙_v${master.version}.xlsx`);
+  } catch (e) {
+    alert("このマスタには交換票（Excel）が保存されていません。\n" + e.message);
+  }
 }
 
 async function downloadRoiCsv() {
   const month = await ensureMonth(app.ym);
   const master = await getMaster(month.masterVersion);
-  // マスタに保存された実座標を出力（scan設定でもlayout由来でも正しい）
   const csv = ["ROI_name,x,y,h,w",
     ...master.roiRows.map((r) => `${r.name},${r.x},${r.y},${r.h},${r.w}`)].join("\n");
   downloadCsv(csv, `ROI_coordinate_v${master.version}.csv`);
@@ -81,56 +115,111 @@ function collectDraftInputs() {
   if (eff) draftEffective = eff.value.trim();
 }
 
+function validateDraftProducts() {
+  if (!draft.length) { alert("商品が1件もありません。"); return false; }
+  const seen = new Set();
+  for (const p of draft) {
+    if (!p.name) { alert("名称が空の商品があります。"); return false; }
+    if (p.points <= 0) { alert(`「${p.name}」の点数が正しくありません。`); return false; }
+    if (!KEY_RE.test(p.key)) {
+      alert(`「${p.name}」の商品IDが不正です: "${p.key}"\n半角英字で始まり、英数字と _ のみ使えます（例: notes_Y, keyholder）。`);
+      return false;
+    }
+    if (seen.has(p.key)) { alert(`商品ID "${p.key}" が重複しています。`); return false; }
+    seen.add(p.key);
+  }
+  return true;
+}
+
+// 商品構成（IDの並び）が同じか
+function sameKeys(a, b) {
+  return a.length === b.length && a.every((p, i) => p.key === b[i].key);
+}
+
+// 編集したExcel交換票のアップロード → 枠抽出 → 自動割り当て → 確認モーダル
+async function onUploadFormXlsx(file) {
+  collectDraftInputs();
+  if (!validateDraftProducts()) return;
+  let parsed;
+  const buf = await file.arrayBuffer();
+  try {
+    parsed = await parseFormXlsx(buf);
+  } catch (e) {
+    alert("Excelの解析に失敗しました: " + e.message);
+    console.error(e);
+    return;
+  }
+  if (!parsed.ok) { alert("Excelの解析に失敗しました:\n" + parsed.error); return; }
+
+  const auto = autoAssign(parsed.boxes, draft);
+  const notes = [...parsed.warnings, ...auto.messages];
+  const note =
+    `Excelから枠を${parsed.boxes.length}個検出し、自動割り当てしました。` +
+    `<b>緑枠のラベルが商品と合っているか確認</b>し、間違いは右のリストから選び直してください。` +
+    (notes.length ? `<br>⚠ ${notes.join("<br>⚠ ")}` : "");
+
+  const candidates = parsed.boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h }));
+  const rows = await openAssignSession({
+    products: draft,
+    baseCanvas: schematicCanvas(parsed),
+    candidates,
+    preAssigned: auto.assigned,
+    note,
+  });
+  if (!rows) { await show(); return; }
+
+  // 候補（セル領域そのまま）はROI用に内側へインセット。手描きの枠はそのまま使う。
+  const candSet = new Set(candidates.map((c) => `${c.x},${c.y},${c.w},${c.h}`));
+  draftRoiRows = rows.map((r) => {
+    const isCandidate = candSet.has(`${r.x},${r.y},${r.w},${r.h}`);
+    const rect = isCandidate ? insetRoi(r) : r;
+    return { name: r.name, x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+  });
+  draftRoiSource = "xlsx";
+  draftFormB64 = bufToB64(buf);
+  draftFormName = file.name;
+  await show();
+}
+
 async function saveDraft() {
   collectDraftInputs();
   const effectiveFrom = el().querySelector("#mstEffective").value.trim();
   if (!/^\d{6}$/.test(effectiveFrom)) { alert("適用開始月は YYYYMM 形式（例: 202608）で入力してください。"); return; }
-  if (!draft.length) { alert("商品が1件もありません。"); return; }
-  // 既定レイアウト使用時のみマス数上限あり（自作票＝ROIエディタ設定済みなら票の設計次第なので制限しない）
-  if (!draftRoiRows && draft.length > maxSlots()) {
-    alert(`既定レイアウトの交換票に置ける商品は最大 ${maxSlots()} 件です。\nそれ以上にする場合はExcel等で票を自作し、「スキャンから座標を設定」を使ってください。`);
-    return;
-  }
-  for (const p of draft) {
-    if (!p.name) { alert("名称が空の商品があります。"); return; }
-    if (p.points <= 0) { alert(`「${p.name}」の点数が正しくありません。`); return; }
-  }
+  if (!validateDraftProducts()) return;
 
-  // 商品ID（主キー）の検証: 半角英字ID・重複なし
-  const seen = new Set();
-  for (const p of draft) {
-    if (!KEY_RE.test(p.key)) {
-      alert(`「${p.name || "(名称未入力)"}」の商品IDが不正です: "${p.key}"\n半角英字で始まり、英数字と _ のみ使えます（例: notes_Y, keyholder）。`);
-      return;
-    }
-    if (seen.has(p.key)) { alert(`商品ID "${p.key}" が重複しています。`); return; }
-    seen.add(p.key);
-  }
+  const latest = (await getAllMasters()).pop();
 
-  // 座標: ROIエディタ設定済みならそれを使用（商品構成と一致するか検証）、未設定なら既定レイアウト
-  let roiRows, layout, roiSource;
+  // 座標の決定: アップロード/スキャンで設定済み → それを使用。
+  // 未設定でも商品構成が前のマスタと同じ（名称・点数変更のみ）なら座標と票を引き継ぐ。
+  let roiRows, roiSource, formXlsxB64, formXlsxName;
   if (draftRoiRows) {
     const expected = new Set([...draft.flatMap((p) => [`${p.key}_0`, `${p.key}_1`]), "date_0", "date_1", "total_1", "total_2"]);
     const actual = new Set(draftRoiRows.map((r) => r.name));
     const same = expected.size === actual.size && [...expected].every((n) => actual.has(n));
     if (!same) {
-      alert("座標を設定した後に商品構成が変わっています。「スキャンから座標を設定」をやり直してください。");
+      alert("座標を設定した後に商品構成が変わっています。交換票のアップロード（または座標設定）をやり直してください。");
       return;
     }
     roiRows = draftRoiRows;
-    layout = null;
-    roiSource = "scan";
+    roiSource = draftRoiSource || "scan";
+    formXlsxB64 = draftFormB64;
+    formXlsxName = draftFormName;
+  } else if (sameKeys(draft, latest.products)) {
+    // 商品の入れ替えなし（点数・名称の変更のみ）→ 票・座標は前のバージョンを引き継ぐ
+    roiRows = latest.roiRows;
+    roiSource = latest.roiSource || "inherited";
+    formXlsxB64 = latest.formXlsxB64 || null;
+    formXlsxName = latest.formXlsxName || null;
   } else {
-    if (!window.confirm(
-      "交換票の座標が未設定のため、既定レイアウト（このアプリで生成・印刷する票と同じ配置）を使います。\n" +
-      "Excel等で自作した票を使う場合はキャンセルし、「スキャンから座標を設定」を行ってください。\n\n" +
-      "既定レイアウトのまま保存しますか？")) return;
-    layout = defaultLayout();
-    roiRows = roiRowsFromLayout(layout, draft);
-    roiSource = "layout";
+    alert(
+      "商品構成が変わっているため、新しい交換票の座標設定が必要です。\n\n" +
+      "1.「現在の交換票（Excel）をダウンロード」で票を取得\n" +
+      "2. Excelで商品や枠を編集（四隅の黒マーカーは残す）\n" +
+      "3.「編集したExcelをアップロード」で座標を設定\n" +
+      "してから保存してください。");
+    return;
   }
 
-  const latest = (await getAllMasters()).pop();
   const products = draft.map(({ key, name, points }) => ({ key, name, points }));
   const version = await nextMasterVersion();
   await putMaster({
@@ -141,8 +230,9 @@ async function saveDraft() {
     products,
     roiRows,
     config: latest.config, // 認識閾値は引き継ぐ
-    layout,
     roiSource,
+    formXlsxB64,
+    formXlsxName,
   });
 
   // データ未入力の月（適用開始月以降）は新バージョンへ切り替え
@@ -158,10 +248,11 @@ async function saveDraft() {
   draft = null;
   draftEffective = null;
   draftRoiRows = null;
+  draftRoiSource = null;
+  draftFormB64 = null;
+  draftFormName = null;
   alert(`マスタ v${version} を保存しました（${effectiveFrom} から適用）。\n` +
-    (roiSource === "scan"
-      ? `自作した交換票を、適用開始月から古い票と入れ替えて使ってください。`
-      : `「交換票を表示・印刷」から新しい票を印刷し、適用開始月から切り替えてください。`));
+    `交換票（Excel）をA4で印刷（1枚に2票）して切り分け、適用開始月から古い票と入れ替えてください。`);
   await show();
 }
 
@@ -191,22 +282,31 @@ function bindDraftEvents() {
     draft.push({ key: "", name: "", points: 25, isNew: true });
     reRender();
   });
-  el().querySelector("#mstRoiEdit").addEventListener("click", async () => {
+
+  el().querySelector("#mstDlForm").addEventListener("click", async () => {
+    const latest = (await getAllMasters()).pop();
+    await downloadFormXlsx(latest);
+  });
+  el().querySelector("#mstUpForm").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    await onUploadFormXlsx(f);
+  });
+  el().querySelector("#mstRoiScan").addEventListener("click", async () => {
     collectDraftInputs();
     if (!window.__CV_READY__) { alert("画像処理エンジンの初期化中です。少し待ってからもう一度お試しください。"); return; }
-    for (const p of draft) {
-      if (!p.name || !KEY_RE.test(p.key)) {
-        alert("先に商品リストを完成させてください（名称と商品IDが必要です）。");
-        return;
-      }
-    }
+    if (!validateDraftProducts()) return;
     const rows = await openRoiEditor(draft);
-    if (rows) draftRoiRows = rows;
+    if (rows) { draftRoiRows = rows; draftRoiSource = "scan"; draftFormB64 = null; draftFormName = null; }
     await show();
   });
   const roiClear = el().querySelector("#mstRoiClear");
   if (roiClear) roiClear.addEventListener("click", async () => {
     draftRoiRows = null;
+    draftRoiSource = null;
+    draftFormB64 = null;
+    draftFormName = null;
     await show();
   });
   el().querySelector("#mstSave").addEventListener("click", saveDraft);
@@ -215,6 +315,9 @@ function bindDraftEvents() {
     draft = null;
     draftEffective = null;
     draftRoiRows = null;
+    draftRoiSource = null;
+    draftFormB64 = null;
+    draftFormName = null;
     await show();
   });
 }
@@ -236,11 +339,17 @@ export async function show() {
       <td>${m.version === month.masterVersion ? `<b class="ok">✓ ${app.ym}で使用中</b>` : ""}</td>
     </tr>`).join("");
 
+  const coordStatus = draftRoiRows
+    ? `<b class="ok">設定済み（${draftRoiSource === "xlsx" ? "Excelから抽出" : "スキャンから設定"}・${draftRoiRows.length}枠）✓</b>`
+    : (draft && sameKeys(draft, latest.products)
+      ? `未設定（商品構成が同じため、保存時に前のマスタから引き継ぎます）`
+      : `<span class="err">未設定（商品構成が変わったため、編集したExcelのアップロードが必要です）</span>`);
+
   const editPanel = editing ? `
     <div class="panel">
       <h3>商品の入れ替え（新しいマスタを作成）</h3>
       <p class="view-sub">保存すると新しいバージョンになります（過去の月のデータには影響しません）。
-      商品は最大 ${maxSlots()} 件。<b>順番どおりに交換票のマスに配置されます</b>（左の列の上から順）。</p>
+      商品の並び順は<b>交換票の並び（左の列の上から順）と同じ</b>にしてください。</p>
       <table class="entry-table">
         <thead><tr><th>商品ID（半角英字）</th><th>名称</th><th>点数</th><th>操作</th></tr></thead>
         <tbody>${draft.map((p, i) => draftRow(p, i, draft.length)).join("")}</tbody>
@@ -251,17 +360,22 @@ export async function show() {
         <button id="mstAdd" class="btn-sub">＋ 商品を追加</button>
       </div>
       <div class="panel">
-        <h3>交換票の座標</h3>
-        <p class="view-sub">現在の設定:
-          ${draftRoiRows
-            ? `<b class="ok">スキャンから設定済み（${draftRoiRows.length} 枠）✓</b>`
-            : `既定レイアウト（このアプリで生成・印刷する票の配置）`}
-        </p>
-        <p class="view-sub">Excel等で<b>交換票を自作</b>する場合は、票に四隅のマーカー（黒い正方形）を入れて
-        スキャンし、下のボタンから記入枠の位置を設定してください（枠は自動検出され、クリックで割り当てられます）。</p>
+        <h3>交換票（Excel）の更新</h3>
+        <p class="view-sub">座標の状態: ${coordStatus}</p>
+        <ol class="mst-steps">
+          <li>「現在の交換票をダウンロード」でExcelファイルを取得</li>
+          <li>Excelで商品名・点数・枠を編集（<b>四隅の黒塗りマーカー(2×2セル)は動かさない</b>。A4に2票の場合は上下とも同じに）</li>
+          <li>「編集したExcelをアップロード」→ 枠が自動で検出・割り当てされるので確認して確定</li>
+        </ol>
         <div class="row-actions">
-          <button id="mstRoiEdit" class="btn-sub">スキャンから座標を設定（ROIエディタ）</button>
-          ${draftRoiRows ? `<button id="mstRoiClear" class="btn-sub">既定レイアウトに戻す</button>` : ""}
+          <button id="mstDlForm" class="btn-sub">現在の交換票をダウンロード</button>
+          <label class="btn">編集したExcelをアップロード
+            <input id="mstUpForm" type="file" accept=".xlsx,${XLSX_MIME}" hidden />
+          </label>
+          ${draftRoiRows ? `<button id="mstRoiClear" class="btn-sub">設定を解除</button>` : ""}
+        </div>
+        <div class="row-actions">
+          <button id="mstRoiScan" class="btn-sub">（予備）印刷物のスキャンから座標を設定</button>
         </div>
       </div>
       <div class="row-actions">
@@ -270,13 +384,13 @@ export async function show() {
         <button id="mstCancel" class="btn-sub">キャンセル</button>
       </div>
       <div class="panel warn-panel">
-        ⚠ 商品を入れ替えたら<b>新しい交換票</b>（アプリで印刷 または Excelで自作）を用意し、
-        適用開始月の初めから古い票と入れ替えてください。月の途中で新旧の票が混ざると正しく読み取れません。
+        ⚠ 商品を入れ替えたら新しい交換票をExcelから印刷し、<b>適用開始月の初め</b>から古い票と入れ替えてください。
+        月の途中で新旧の票が混ざると正しく読み取れません。
       </div>
     </div>` : `
     <div class="panel">
       <h3>商品の入れ替え</h3>
-      <p class="view-sub">商品の追加・削除・点数変更を行うと、新しいバージョンのマスタと交換票が作られます。</p>
+      <p class="view-sub">商品の追加・削除・点数変更と、交換票（Excel）の更新を行います。</p>
       <button id="mstEdit" class="btn">商品マスタを編集する</button>
     </div>`;
 
@@ -290,10 +404,10 @@ export async function show() {
       </table>
     </div>
     <div class="panel">
-      <h3>交換票の印刷</h3>
-      <p class="view-sub">この月のマスタから交換票（A5横）を生成します。印刷ダイアログでは<b>用紙A5・横向き・余白なし・倍率100%</b>を指定してください。</p>
+      <h3>交換票（Excel）</h3>
+      <p class="view-sub">この月のマスタに対応する交換票です。ダウンロードしてExcelから印刷してください（A4縦・1枚に2票→切って使用）。</p>
       <div class="row-actions">
-        <button id="mstPrint" class="btn">交換票を表示・印刷</button>
+        <button id="mstDl" class="btn">交換票（Excel）をダウンロード</button>
         <button id="mstRoi" class="btn-sub">ROI座標CSVをダウンロード（開発用）</button>
       </div>
     </div>
@@ -306,7 +420,7 @@ export async function show() {
       </table>
     </div>`;
 
-  el().querySelector("#mstPrint").addEventListener("click", openPrintWindow);
+  el().querySelector("#mstDl").addEventListener("click", () => downloadFormXlsx(master));
   el().querySelector("#mstRoi").addEventListener("click", downloadRoiCsv);
   if (editing) {
     bindDraftEvents();

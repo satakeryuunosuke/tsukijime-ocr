@@ -9,7 +9,7 @@ const ASSETS = "public/assets/";
 const GOODS_PER_SHEET = 8;
 
 let loading = null;
-function ensureExcelJs() {
+export function ensureExcelJs() {
   if (window.ExcelJS) return Promise.resolve();
   if (!loading) {
     loading = new Promise((resolve, reject) => {
