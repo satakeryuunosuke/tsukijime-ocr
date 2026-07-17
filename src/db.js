@@ -75,7 +75,8 @@ export function emptyMonth(ym, masterVersion) {
     arrivals: {},       // { day(number): { productKey: qty } }
     specials: [],       // [{ id, day, method('cash'|'debit'|'point'), qty: {notes_Y..} }]
     physicalCount: null,// { productKey: qty } 未入力なら null
-    cash: null,         // { opening: {金種:枚数}|null, closing: {金種:枚数}|null } 未入力なら null
+    cash: null,         // { opening, closing: {金種:枚数}|null, withdrawals: [{id,day,counts}] } 未入力なら null
+    readerPending: null,// { fail, ng, low } 読み取りの要対応件数（ホーム表示用）。無ければ null
     note: "",
     updatedAt: null,
   };

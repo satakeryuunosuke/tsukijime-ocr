@@ -3,7 +3,7 @@
 import { openPdf, renderPdfPage } from "../pdf.js";
 import { recognizePage } from "../pipeline.js";
 import { buildCsv, buildAggregatedCsv, downloadCsv } from "../csv.js";
-import { validatePage, daysInMonth } from "../validate.js";
+import { validatePage, daysInMonth, qtyOf, toInt } from "../validate.js";
 import { openReview } from "../review.js";
 import { ensureMonth, putMonth, getMaster } from "../db.js";
 
@@ -61,13 +61,24 @@ async function prepareSources(files) {
   }
 }
 
+// ROI名（date_0, notes_Y_1 など）→ 日本語の項目名（桁の区別はしない）
+function fieldLabel(name) {
+  if (name.startsWith("date")) return "日付";
+  if (name.startsWith("total")) return "合計";
+  const key = name.replace(/_[01]$/, "");
+  const p = ((currentCtx && currentCtx.products) || []).find((x) => x.key === key);
+  return p ? p.name : name;
+}
+
 function statusHtml(page) {
   if (!page.ok) return `<span class="err">✗ マーカー検出失敗（クリックで手動補正）</span>`;
   const v = page.valid || {};
   if (v.checksumOk === false) return `<span class="err">✗ 合計不一致（要確認）</span>`;
   if (v.dateOk === false) return `<span class="err">✗ 日付不正（要確認）</span>`;
-  if (page.lowConfidence && page.lowConfidence.length)
-    return `<span class="warn">⚠ 低信頼度: ${page.lowConfidence.join(", ")}</span>`;
+  if (page.lowConfidence && page.lowConfidence.length) {
+    const labels = [...new Set(page.lowConfidence.map(fieldLabel))];
+    return `<span class="warn">⚠ 低信頼度: ${labels.join("、")}</span>`;
+  }
   if (page.autoTuned)
     return `<span class="ok">✓ OK（マーカー自動補正）</span>`;
   return `<span class="ok">✓ OK</span>`;
@@ -82,15 +93,27 @@ function isFullyOk(page) {
   return true;
 }
 
+// 認識結果を日本語で要約（商品名×個数・合計点数）
 function digitsSummary(predictions) {
+  const products = (currentCtx && currentCtx.products) || [];
   const parts = [];
-  for (const [k, v] of Object.entries(predictions || {})) {
-    if (k.endsWith("_confidence") || k.endsWith("_low_confidence_flag")) continue;
-    if (v !== "" && v != null) parts.push(`${k}=${v}`);
+  for (const p of products) {
+    const q = qtyOf(predictions, p.key);
+    if (q) parts.push(`${p.name}×${q}`);
   }
+  const totalPts = (toInt(predictions.total_2) * 10 + toInt(predictions.total_1)) * 10;
+  if (totalPts) parts.push(`合計${totalPts}点`);
   return parts;
 }
 const dateOf = (p) => (p && (`${p.date_1 ?? ""}${p.date_0 ?? ""}`)) || "-";
+
+function rowHtml(p, i) {
+  const digits = p.ok ? digitsSummary(p.predictions).join("　") || "(なし)" : "-";
+  return `<tr data-idx="${i}" class="clickable ${p.ok ? "" : "row-err"}">
+    <td>${p.name}</td><td>${p.ok ? dateOf(p.predictions) : "-"}</td>
+    <td class="digits">${digits}</td><td>${statusHtml(p)}</td>
+    <td class="edit-cell">✎ 編集</td></tr>`;
+}
 
 function renderResults() {
   const ok = pages.filter((p) => p.ok);
@@ -104,32 +127,41 @@ function renderResults() {
     `<span class="warn">低信頼度 ${lowConf.length}</span> / ` +
     `<span class="err">マーカー失敗 ${markerFail.length}</span>`;
 
-  $("resultBody").innerHTML = pages
-    .map((p, i) => {
-      const digits = p.ok ? digitsSummary(p.predictions).join("　") || "(なし)" : "-";
-      return `<tr data-idx="${i}" class="clickable ${p.ok ? "" : "row-err"}">
-        <td>${p.name}</td><td>${p.ok ? dateOf(p.predictions) : "-"}</td>
-        <td class="digits">${digits}</td><td>${statusHtml(p)}</td>
-        <td class="edit-cell">✎ 編集</td></tr>`;
-    })
-    .join("");
+  // 要対応（マーカー失敗・NG・低信頼度）は別枠に、確定分は下の表に分けて表示
+  const attention = [], done = [];
+  pages.forEach((p, i) => (isFullyOk(p) ? done : attention).push(rowHtml(p, i)));
+  $("needFixWrap").hidden = attention.length === 0;
+  $("needFixBody").innerHTML = attention.join("");
+  $("fixAllBtn").textContent = `要対応 ${attention.length} 件をまとめて修正`;
+  $("resultBody").innerHTML = done.length ? done.join("")
+    : `<tr><td colspan="5" class="muted">確定したページはまだありません。</td></tr>`;
 
   $("downloadBtn").disabled = ok.length === 0;
   $("downloadAggBtn").disabled = ok.length === 0;
   $("results").hidden = pages.length === 0;
 }
 
-// ✓OK のページを月データへ保存（同名ページは上書き＝再スキャンは修正扱い）
+// ✓OK のページを月データへ保存（同名ページは上書き＝再スキャンは修正扱い）。
+// あわせて要対応（マーカー失敗・NG・低信頼度）の件数も月データに保存し、
+// ホーム画面から「読み取りに未対応が残っている」ことが分かるようにする。
 async function saveOkPagesToMonth() {
   if (!sessionYm) return;
-  const okPages = pages.filter(isFullyOk);
-  if (!okPages.length) { await renderSavedInfo(); return; }
   const month = await ensureMonth(sessionYm);
-  const byName = new Map(month.pages.map((p) => [p.name, p]));
-  for (const p of okPages) {
-    byName.set(p.name, { name: p.name, predictions: p.predictions, savedAt: new Date().toISOString() });
+  const okPages = pages.filter(isFullyOk);
+  if (okPages.length) {
+    const byName = new Map(month.pages.map((p) => [p.name, p]));
+    for (const p of okPages) {
+      byName.set(p.name, { name: p.name, predictions: p.predictions, savedAt: new Date().toISOString() });
+    }
+    month.pages = [...byName.values()];
   }
-  month.pages = [...byName.values()];
+  const fail = pages.filter((p) => !p.ok).length;
+  const ng = pages.filter((p) => p.ok && p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false)).length;
+  const low = pages.filter((p) => isFullyOk(p) === false && p.ok &&
+    !(p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false))).length;
+  month.readerPending = fail + ng + low
+    ? { fail, ng, low, updatedAt: new Date().toISOString() }
+    : null;
   await putMonth(month);
   await renderSavedInfo();
 }
@@ -226,23 +258,40 @@ function onDownloadAggregated() {
   downloadCsv(csv, `recognition_results_${ym}_daily.csv`);
 }
 
+// 訂正モーダルを開いて、閉じたら再描画・保存する
+async function reviewPage(page) {
+  await openReview(page, {
+    ...currentCtx,
+    renderRaw,
+    onUpdate: () => renderResults(),
+  });
+  renderResults();
+  await saveOkPagesToMonth();
+}
+
+// 要対応のページを順番に連続で修正する。
+// ユーザーが未解決のまま閉じたら（キャンセル）そこで中断する。
+async function fixAllSequential() {
+  for (;;) {
+    const next = pages.find((p) => !isFullyOk(p));
+    if (!next) break;
+    await reviewPage(next);
+    if (!isFullyOk(next)) break;
+  }
+}
+
 // 一度だけ呼ばれる初期化（イベント紐付け）
 export function init(appRef) {
   app = appRef;
 
-  $("resultBody").addEventListener("click", (e) => {
+  const onRowClick = (e) => {
     const tr = e.target.closest("tr[data-idx]");
     if (!tr) return;
-    const page = pages[+tr.dataset.idx];
-    openReview(page, {
-      ...currentCtx,
-      renderRaw,
-      onUpdate: () => renderResults(),
-    }).then(async () => {
-      renderResults();
-      await saveOkPagesToMonth();
-    });
-  });
+    reviewPage(pages[+tr.dataset.idx]);
+  };
+  $("resultBody").addEventListener("click", onRowClick);
+  $("needFixBody").addEventListener("click", onRowClick);
+  $("fixAllBtn").addEventListener("click", fixAllSequential);
 
   $("fileInput").addEventListener("change", (e) => {
     if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files));

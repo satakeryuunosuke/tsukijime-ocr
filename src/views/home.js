@@ -14,6 +14,27 @@ function card(view, title, status, ok, desc) {
 
 export function init(appRef) { app = appRef; }
 
+// 次にやるべき工程を1つ決めて、でかでかと表示するバナー
+function nextAction(month) {
+  const p = month.readerPending;
+  const pendingN = p ? (p.fail || 0) + (p.ng || 0) + (p.low || 0) : 0;
+  if (pendingN) {
+    return {
+      view: "reader", cls: "warn", title: "読み取りの要対応を解消する",
+      desc: `未解決の読み取りが ${pendingN} 件あります（マーカー失敗 ${p.fail || 0}・検算/日付NG ${p.ng || 0}・低信頼度 ${p.low || 0}）。該当の交換票をもう一度読み取り、修正・確定してください。`,
+    };
+  }
+  if (month.carryover === null)
+    return { view: "carryover", cls: "", title: "繰越在庫を入力する", desc: "月初時点の在庫数を入力します。前月の帳簿残から自動入力できます。" };
+  if (!month.pages.length)
+    return { view: "reader", cls: "", title: "交換票を読み取る", desc: "交換票のスキャンPDFをAIで読み取り、確認して保存します。月内は何回かに分けてOK。" };
+  if (!(month.cash && month.cash.closing))
+    return { view: "cash", cls: "", title: "月末の現金を数えて入力する", desc: "金庫の現金を金種別に数えて入力すると、売上とのつじつまを自動チェックします。" };
+  if (month.physicalCount === null)
+    return { view: "closing", cls: "", title: "実棚数を入力して棚卸する", desc: "実際に棚を数えて入力し、帳簿残との差異を確認します。" };
+  return { view: "closing", cls: "done", title: "この月の作業は完了しています ✓", desc: "月締めタブからExcelレポートを出力して本部に報告してください。" };
+}
+
 export async function show() {
   const ym = app.ym;
   const month = await ensureMonth(ym);
@@ -26,15 +47,27 @@ export async function show() {
   const specialsN = (month.specials || []).length;
   const cashDone = !!(month.cash && month.cash.closing);
   const physDone = month.physicalCount !== null;
+  const p = month.readerPending;
+  const pendingN = p ? (p.fail || 0) + (p.ng || 0) + (p.low || 0) : 0;
+  const na = nextAction(month);
+
+  const readerStatus = pendingN
+    ? `<span class="err">要対応 ${pendingN} 件</span>`
+    : (pagesN ? `保存済み ${pagesN} 枚` : "未読み取り");
 
   el().innerHTML = `
     <h2 class="view-title">${y}年${m}月 の月締め</h2>
+    <a class="home-next ${na.cls}" href="#${na.view}">
+      <div class="hn-label">次にやること</div>
+      <div class="hn-title">${na.title}</div>
+      <p class="hn-desc">${na.desc}</p>
+    </a>
     <p class="view-sub">上から順に進めると月締めが完了します。使用マスタ: v${month.masterVersion}${master ? `（${master.label || ""}・商品${master.products.length}件）` : ""}</p>
     <div class="home-grid">
       ${card("carryover", "1. 繰越在庫", carryoverDone ? "入力済み ✓" : "未入力",
         carryoverDone, "月初時点の在庫数。前月の帳簿残から自動入力できます。")}
-      ${card("reader", "2. 交換票の読み取り", pagesN ? `保存済み ${pagesN} 枚` : "未読み取り",
-        pagesN > 0, "交換票のスキャンPDFをAIで読み取り、確認・訂正して保存します。月内は何回かに分けてOK。")}
+      ${card("reader", "2. 交換票の読み取り", readerStatus,
+        pagesN > 0 && !pendingN, "交換票のスキャンPDFをAIで読み取り、確認・訂正して保存します。月内は何回かに分けてOK。")}
       ${card("arrivals", "3. 入庫の記録", arrivalDays ? `${arrivalDays} 日分入力` : "入庫なし/未入力",
         arrivalDays > 0, "グッズが届いたら日付ごとに個数を記録します。")}
       ${card("specials", "4. ノート購入", specialsN ? `${specialsN} 件` : "0 件",

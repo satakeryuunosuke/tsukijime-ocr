@@ -10,6 +10,7 @@ import { openRoiEditor, openAssignSession } from "../roiEditor.js";
 import { parseFormXlsx, autoAssign, schematicCanvas, insetRoi } from "../xlsxForm.js";
 import { downloadCsv } from "../csv.js";
 import { toInt } from "../validate.js";
+import { bindGridNav } from "../keynav.js";
 
 const ASSETS = "public/assets/";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -309,6 +310,11 @@ function bindDraftEvents() {
     draftFormName = null;
     await show();
   });
+  // 商品の一覧テーブルは列（ID・名称・点数）ごとに Enter / 矢印キーで移動できるようにする
+  bindGridNav([...el().querySelectorAll(".mst-key")], 1);
+  bindGridNav([...el().querySelectorAll(".mst-name")], 1);
+  bindGridNav([...el().querySelectorAll(".mst-points")], 1);
+
   el().querySelector("#mstSave").addEventListener("click", saveDraft);
   el().querySelector("#mstCancel").addEventListener("click", async () => {
     editing = false;

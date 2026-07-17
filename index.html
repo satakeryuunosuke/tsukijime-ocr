@@ -64,6 +64,19 @@
           </div>
         </div>
         <p id="savedInfo" class="status"></p>
+        <section id="needFixWrap" class="needfix-panel" hidden>
+          <div class="results-head">
+            <h3 class="needfix-title">⚠ 対応が必要な読み取り結果</h3>
+            <button id="fixAllBtn" class="btn">まとめて修正</button>
+          </div>
+          <table class="result-table">
+            <thead>
+              <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>
+            </thead>
+            <tbody id="needFixBody"></tbody>
+          </table>
+        </section>
+        <h3 class="okpages-title">確定した読み取り結果（自動保存）</h3>
         <table class="result-table">
           <thead>
             <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>

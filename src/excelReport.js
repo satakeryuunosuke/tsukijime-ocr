@@ -4,6 +4,8 @@
 // 追加で「棚卸」シート（帳簿残 vs 実棚数 vs 差異）と元データ4シートを含める。
 import { computeLedger, noteProducts, aggregateSpecials, aggregateDaily, SPECIAL_METHODS } from "./ledger.js";
 import { toInt, daysInMonth } from "./validate.js";
+import { getSetting } from "./db.js";
+import { DENOMS, DENOM_NAMES, cashTotal, dailyCashSales, withdrawalsTotal, buildDailyDenomTable } from "./cash.js";
 
 const ASSETS = "public/assets/";
 const GOODS_PER_SHEET = 8;
@@ -43,12 +45,14 @@ function borderRows(ws, fromRow, toRow, toCol) {
   }
 }
 
-// ノート台帳: 商品ごとに [入荷, 現金, 口座, シール交換, ポイント, 残] の6列
+// ノート台帳: 商品ごとに [入荷, 現金, 口座, シール交換, ポイント, 残] の6列。
+// ヘッダの直後（1日の行の上）に繰越（月初在庫）の行を入れる。
 function addNotesSheet(wb, month, products, ledger) {
   const notes = noteProducts(products);
   if (!notes.length) return;
   const ws = wb.addWorksheet("ノート台帳");
   const sub = ["入荷", "現金", "口座", "ｼｰﾙ交換", "ﾎﾟｲﾝﾄ", "残"];
+  const co = month.carryover || {};
 
   const head1 = ["日付"];
   const head2 = [""];
@@ -66,6 +70,10 @@ function addNotesSheet(wb, month, products, ledger) {
   styleHeaderRow(ws.getRow(1));
   styleHeaderRow(ws.getRow(2));
 
+  const coCells = ["繰越"];
+  for (const p of notes) coCells.push("", "", "", "", "", toInt(co[p.key]));
+  ws.addRow(coCells);
+
   for (let d = 1; d <= ledger.maxDays; d++) {
     const cells = [d];
     for (const p of notes) {
@@ -74,21 +82,24 @@ function addNotesSheet(wb, month, products, ledger) {
     }
     ws.addRow(cells);
   }
-  borderRows(ws, 3, 2 + ledger.maxDays, 1 + notes.length * sub.length);
-  // 残の列は薄グレーで見やすく
+  borderRows(ws, 3, 3 + ledger.maxDays, 1 + notes.length * sub.length);
+  // 残の列と繰越行は薄グレーで見やすく
+  ws.getRow(3).font = { bold: true };
   for (let i = 0; i < notes.length; i++) {
     const col = 1 + (i + 1) * sub.length;
-    for (let r = 3; r <= 2 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
+    for (let r = 3; r <= 3 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
   }
   ws.getColumn(1).width = 6;
   for (let c = 2; c <= 1 + notes.length * sub.length; c++) ws.getColumn(c).width = 8;
-  ws.views = [{ state: "frozen", xSplit: 1, ySplit: 2 }];
+  ws.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
 }
 
-// グッズ台帳: 商品ごとに [入荷, 交換, 残] の3列（8商品/シートで分割）
+// グッズ台帳: 商品ごとに [入荷, 交換, 残] の3列（8商品/シートで分割）。
+// ヘッダの直後（1日の行の上）に繰越（月初在庫）の行を入れる。
 function addGoodsSheets(wb, month, products, ledger) {
   const goods = products.filter((p) => !p.key.startsWith("notes_"));
   const sub = ["入荷", "交換", "残"];
+  const co = month.carryover || {};
   for (let i = 0; i < goods.length; i += GOODS_PER_SHEET) {
     const chunk = goods.slice(i, i + GOODS_PER_SHEET);
     const ws = wb.addWorksheet(`グッズ台帳${goods.length > GOODS_PER_SHEET ? Math.floor(i / GOODS_PER_SHEET) + 1 : ""}`);
@@ -108,6 +119,10 @@ function addGoodsSheets(wb, month, products, ledger) {
     styleHeaderRow(ws.getRow(1));
     styleHeaderRow(ws.getRow(2));
 
+    const coCells = ["繰越"];
+    for (const p of chunk) coCells.push("", "", toInt(co[p.key]));
+    ws.addRow(coCells);
+
     for (let d = 1; d <= ledger.maxDays; d++) {
       const cells = [d];
       for (const p of chunk) {
@@ -116,14 +131,15 @@ function addGoodsSheets(wb, month, products, ledger) {
       }
       ws.addRow(cells);
     }
-    borderRows(ws, 3, 2 + ledger.maxDays, 1 + chunk.length * sub.length);
+    borderRows(ws, 3, 3 + ledger.maxDays, 1 + chunk.length * sub.length);
+    ws.getRow(3).font = { bold: true };
     for (let j = 0; j < chunk.length; j++) {
       const col = 1 + (j + 1) * sub.length;
-      for (let r = 3; r <= 2 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
+      for (let r = 3; r <= 3 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
     }
     ws.getColumn(1).width = 6;
     for (let c = 2; c <= 1 + chunk.length * sub.length; c++) ws.getColumn(c).width = 9;
-    ws.views = [{ state: "frozen", xSplit: 1, ySplit: 2 }];
+    ws.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
   }
 }
 
@@ -136,7 +152,7 @@ function addStocktakeSheet(wb, month, products, ledger) {
 
   ws.addRow([`${month.ym.slice(0, 4)}年${parseInt(month.ym.slice(4), 10)}月 棚卸表`]);
   ws.getCell(1, 1).font = { bold: true, size: 14 };
-  const head = ws.addRow(["商品", "点数", "繰越", "入庫計", "シール交換計", "現金", "口座", "ポイント", "帳簿残", "実棚数", "差異(実棚-帳簿)"]);
+  const head = ws.addRow(["商品", "繰越", "入庫計", "シール交換計", "現金", "口座", "ポイント", "帳簿残", "実棚数", "差異(実棚-帳簿)"]);
   styleHeaderRow(head);
 
   for (const p of products) {
@@ -146,17 +162,71 @@ function addStocktakeSheet(wb, month, products, ledger) {
     const physV = month.physicalCount ? toInt(phys[p.key]) : null;
     const diff = physV === null ? null : physV - book;
     const row = ws.addRow([
-      p.name, p.points, toInt(co[p.key]), sum("arrival"), sum("exchange"),
+      p.name, toInt(co[p.key]), sum("arrival"), sum("exchange"),
       isNote(p) ? sum("cash") : "", isNote(p) ? sum("debit") : "", isNote(p) ? sum("point") : "",
       book, physV === null ? "" : physV, diff === null ? "" : diff,
     ]);
     if (diff !== null && diff !== 0) {
-      row.getCell(11).font = { bold: true, color: { argb: "FFDC2626" } };
+      row.getCell(10).font = { bold: true, color: { argb: "FFDC2626" } };
     }
   }
-  borderRows(ws, 2, 2 + products.length, 11);
+  borderRows(ws, 2, 2 + products.length, 10);
   ws.getColumn(1).width = 20;
-  for (let c = 2; c <= 11; c++) ws.getColumn(c).width = 11;
+  for (let c = 2; c <= 10; c++) ws.getColumn(c).width = 11;
+}
+
+// 現金管理シート: つじつまチェックの要約と日別金種表（現金管理タブと同じ内容）
+async function addCashSheet(wb, month, products) {
+  const notes = noteProducts(products);
+  if (!notes.length) return;
+  const prices = (await getSetting("notePrices")) || {};
+  const salesByDay = dailyCashSales(month, products, prices);
+  const cash = month.cash || {};
+  const withdrawals = cash.withdrawals || [];
+
+  const ws = wb.addWorksheet("現金管理", { properties: { tabColor: { argb: "FF16A34A" } } });
+  ws.addRow([`${month.ym.slice(0, 4)}年${parseInt(month.ym.slice(4), 10)}月 現金管理`]);
+  ws.getCell(1, 1).font = { bold: true, size: 14 };
+
+  const openTotal = cashTotal(cash.opening);
+  const closeTotal = cashTotal(cash.closing);
+  const totalSales = [...salesByDay.values()].reduce((a, b) => a + b, 0);
+  const withdrawn = withdrawalsTotal(withdrawals);
+  const expected = openTotal + totalSales - withdrawn;
+
+  const summary = [
+    ["月初の現金", openTotal],
+    ["現金売上", totalSales],
+    ["本部への持ち出し", -withdrawn],
+    ["あるべき月末の現金", expected],
+    ["実際の月末の現金", closeTotal],
+    ["差異（実際−あるべき）", closeTotal - expected],
+  ];
+  for (const [label, value] of summary) {
+    const row = ws.addRow([label, value]);
+    row.getCell(1).font = { bold: true };
+    row.getCell(2).numFmt = "#,##0";
+  }
+
+  ws.addRow([]);
+  if (cash.opening && cash.closing) {
+    const table = buildDailyDenomTable(month.ym, cash.opening, cash.closing, salesByDay, withdrawals);
+    const headRow = ws.addRow(["日付", ...DENOMS.map((d) => DENOM_NAMES[d]), "合計金額", "現金売上", "本部持ち出し"]);
+    styleHeaderRow(headRow);
+    for (const r of table.rows) {
+      ws.addRow([
+        r.day === 0 ? "月初" : `${r.day}日`,
+        ...DENOMS.map((d) => r.counts[d]),
+        r.total, r.sales || "", r.withdrawal || "",
+      ]);
+    }
+    borderRows(ws, headRow.number, ws.rowCount, 1 + DENOMS.length + 3);
+  } else {
+    ws.addRow(["月初・月末の金種が未入力のため、日別金種表は作成していません。"]);
+  }
+
+  ws.getColumn(1).width = 20;
+  for (let c = 2; c <= 1 + DENOMS.length + 3; c++) ws.getColumn(c).width = 11;
 }
 
 // 元データシート（旧テンプレの summary_yyyymm 等と同じ列構成）
@@ -212,6 +282,7 @@ export async function downloadReport(month, products) {
   addStocktakeSheet(wb, month, products, ledger);
   addNotesSheet(wb, month, products, ledger);
   addGoodsSheets(wb, month, products, ledger);
+  await addCashSheet(wb, month, products);
   addDataSheets(wb, month, products);
 
   const buf = await wb.xlsx.writeBuffer();

@@ -3,6 +3,7 @@
 import { ensureMonth, putMonth, getMonth, getMaster } from "../db.js";
 import { computeLedger } from "../ledger.js";
 import { toInt } from "../validate.js";
+import { bindGridNav } from "../keynav.js";
 
 let app = null;
 const el = () => document.getElementById("view-carryover");
@@ -88,16 +89,5 @@ export async function show() {
   el().querySelector("#coFillPhys").addEventListener("click", () => fillFromPrev(true));
 
   // Enter / 矢印キーで次の入力欄へ（旧GUI版の操作感を踏襲）
-  const inputs = [...el().querySelectorAll("input[data-key]")];
-  inputs.forEach((inp, i) => {
-    inp.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === "ArrowDown") {
-        e.preventDefault();
-        (inputs[i + 1] || inputs[i]).focus();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        (inputs[i - 1] || inputs[i]).focus();
-      }
-    });
-  });
+  bindGridNav([...el().querySelectorAll("input[data-key]")], 1);
 }

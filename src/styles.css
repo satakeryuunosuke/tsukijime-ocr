@@ -89,7 +89,7 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
   padding: 1rem; overflow: auto;
 }
 .rv-modal {
-  background: var(--card); border-radius: 14px; width: min(1100px, 100%);
+  background: var(--card); border-radius: 14px; width: min(1400px, 100%);
   margin: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3);
 }
 .rv-head {
@@ -122,22 +122,22 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .rv-guide { font-size: .78rem; color: var(--muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .7rem; }
 
 .rv-edit { display: flex; gap: 1.25rem; flex-wrap: wrap; }
-.rv-img { flex: 1 1 380px; min-width: 300px; }
+.rv-img { flex: 1 1 560px; min-width: 320px; }
 .rv-disp { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; }
-.rv-form { flex: 1 1 300px; min-width: 260px; }
+.rv-form { flex: 1 1 320px; min-width: 280px; }
 
 .rv-field { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
-.rv-field > label { min-width: 110px; font-size: .85rem; font-weight: 600; }
-.rv-field input { width: 70px; padding: .35rem .45rem; border: 1px solid var(--border); border-radius: 6px; font-size: .95rem; }
+.rv-field > label { min-width: 110px; font-size: .95rem; font-weight: 600; }
+.rv-field input { width: 96px; padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1.15rem; }
 
 .rv-products {
-  max-height: 320px; overflow: auto; border: 1px solid var(--border);
+  max-height: 420px; overflow: auto; border: 1px solid var(--border);
   border-radius: 8px; padding: .5rem; margin: .5rem 0;
 }
-.rv-prow { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .18rem .2rem; }
-.rv-prow label { font-size: .85rem; }
+.rv-prow { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .2rem .2rem; }
+.rv-prow label { font-size: .95rem; }
 .rv-prow small { color: var(--muted); }
-.rv-prow input { width: 64px; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; }
+.rv-prow input { width: 80px; padding: .35rem .45rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1.15rem; }
 
 .rv-check { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; font-size: .9rem; margin: .5rem 0; }
 .rv-check > div { margin: .15rem 0; }
@@ -211,13 +211,15 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .mst-ops { white-space: nowrap; }
 
 /* 特別交換フォーム */
-.sp-form { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.sp-form { display: flex; align-items: flex-start; gap: 1.25rem; flex-wrap: wrap; }
 .sp-form select, .sp-note input { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
-.sp-methods { display: flex; gap: .8rem; padding-bottom: .3rem; }
+.sp-methods { display: flex; gap: .8rem; padding-top: 1.4rem; }
 .sp-radio { font-size: .9rem; font-weight: 600; }
-.sp-notes { display: flex; gap: .6rem; flex-wrap: wrap; }
-.sp-note { display: flex; flex-direction: column; font-size: .78rem; color: var(--muted); gap: .2rem; }
-.sp-note input { width: 70px; text-align: right; }
+/* 各色のノートは縦1列に並べ、Enterで下の欄へ移動できるようにする */
+.sp-notes { display: flex; flex-direction: column; gap: .35rem; }
+.sp-note { display: flex; align-items: center; justify-content: space-between; gap: .6rem; font-size: .85rem; color: var(--text); }
+.sp-note input { width: 80px; text-align: right; }
+.sp-add-wrap { align-self: flex-end; }
 
 /* 月締め */
 .table-scroll { overflow-x: auto; }
@@ -250,3 +252,24 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
 
 /* 訂正モーダル: 生画像切替 */
 .rv-img-tools { margin-bottom: .4rem; }
+
+/* 読み取り: 要対応の別枠 */
+.needfix-panel {
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px;
+  padding: .75rem 1rem; margin: .75rem 0 1rem;
+}
+.needfix-title { margin: 0; font-size: 1rem; color: var(--err); }
+.okpages-title { font-size: 1rem; margin: 1rem 0 .5rem; }
+
+/* ホーム: 次にやること */
+.home-next {
+  display: block; background: linear-gradient(135deg, #0ea5e9, #0369a1);
+  color: #fff; border-radius: 14px; padding: 1.1rem 1.4rem; margin: .5rem 0 1.1rem;
+  text-decoration: none; box-shadow: 0 4px 14px rgba(14,165,233,.35);
+}
+.home-next:hover { filter: brightness(1.06); }
+.home-next .hn-label { font-size: .85rem; opacity: .9; font-weight: 600; }
+.home-next .hn-title { font-size: 1.6rem; font-weight: 800; margin: .15rem 0; }
+.home-next .hn-desc { font-size: .88rem; opacity: .92; margin: 0; }
+.home-next.warn { background: linear-gradient(135deg, #dc2626, #991b1b); box-shadow: 0 4px 14px rgba(220,38,38,.35); }
+.home-next.done { background: linear-gradient(135deg, #059669, #047857); box-shadow: 0 4px 14px rgba(5,150,105,.35); }

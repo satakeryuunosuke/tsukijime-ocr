@@ -3,8 +3,11 @@
 import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { noteProducts, SPECIAL_METHODS } from "../ledger.js";
 import { daysInMonth, toInt } from "../validate.js";
+import { bindGridNav } from "../keynav.js";
 
 let app = null;
+let lastDay = null;    // 追加後も日付・種別の選択を保持する
+let lastMethod = null;
 const el = () => document.getElementById("view-specials");
 
 const methodName = (id) => (SPECIAL_METHODS.find((m) => m.id === id) || {}).name || id;
@@ -21,6 +24,8 @@ async function addEntry() {
   if (!day) { alert("日付を選択してください。"); return; }
   if (!any) { alert("冊数を1冊以上入力してください。"); return; }
 
+  lastDay = day;
+  lastMethod = method;
   const month = await ensureMonth(app.ym);
   month.specials.push({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -55,21 +60,24 @@ export async function show() {
          .map((p) => `${p.name.replace("ノート", "")}×${toInt(s.qty[p.key])}`)
          .join(" ") || "-";
 
+  const selDay = lastDay && lastDay <= maxDays ? lastDay : 1;
+  const selMethod = lastMethod || SPECIAL_METHODS[0].id;
+
   el().innerHTML = `
     <h2 class="view-title">ノート購入（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
-    <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入があったら、その都度ここに記録してください（交換票とは別管理）。</p>
+    <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
     <div class="panel">
       <h3>記録を追加</h3>
       <div class="sp-form">
         <label>日付
           <select id="spDay">
             ${Array.from({ length: maxDays }, (_, i) => i + 1).map((d) =>
-              `<option value="${d}">${d}日</option>`).join("")}
+              `<option value="${d}" ${d === selDay ? "selected" : ""}>${d}日</option>`).join("")}
           </select>
         </label>
         <div class="sp-methods">
-          ${SPECIAL_METHODS.map((m, i) => `
-            <label class="sp-radio"><input type="radio" name="spMethod" value="${m.id}" ${i === 0 ? "checked" : ""}/> ${m.name}</label>`).join("")}
+          ${SPECIAL_METHODS.map((m) => `
+            <label class="sp-radio"><input type="radio" name="spMethod" value="${m.id}" ${m.id === selMethod ? "checked" : ""}/> ${m.name}</label>`).join("")}
         </div>
         <div class="sp-notes">
           ${notes.map((p) => `
@@ -77,7 +85,7 @@ export async function show() {
               <input type="number" inputmode="numeric" min="0" data-key="${p.key}" placeholder="0" />
             </label>`).join("")}
         </div>
-        <button id="spAdd" class="btn">追加</button>
+        <div class="sp-add-wrap"><button id="spAdd" class="btn">追加</button></div>
       </div>
     </div>
     <div class="panel">
@@ -99,4 +107,12 @@ export async function show() {
   el().querySelector("#spAdd").addEventListener("click", addEntry);
   el().querySelectorAll("button[data-del]").forEach((b) =>
     b.addEventListener("click", () => deleteEntry(b.dataset.del)));
+
+  // 縦1列のノート入力欄を Enter / 矢印キーで移動。最後の欄で Enter すると追加ボタンへ
+  const noteInputs = [...el().querySelectorAll(".sp-notes input[data-key]")];
+  bindGridNav(noteInputs, 1);
+  const last = noteInputs[noteInputs.length - 1];
+  if (last) last.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); el().querySelector("#spAdd").focus(); }
+  });
 }

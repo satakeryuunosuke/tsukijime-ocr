@@ -7,6 +7,7 @@ import { extractRois, deleteRois } from "./extractor.js";
 import { predictNumbers } from "./predictor.js";
 import { drawOverlay } from "./overlay.js";
 import { validatePage, qtyOf, toInt, fillTotalFromQty } from "./validate.js";
+import { bindGridNav } from "./keynav.js";
 
 // page: { name, ok, coords, predictions, lowConfidence }
 // ctx:  { roiRows, products, model, cfg, ym, renderRaw, onUpdate }
@@ -251,8 +252,8 @@ function editMode(body, page, rawCanvas, ctx, close) {
         </div>
         <div class="rv-products"></div>
         <div class="rv-field rv-total">
-          <label>記入された合計欄</label>
-          <input type="number" min="0" max="99" class="rv-in-total" inputmode="numeric" />
+          <label>合計点数</label>
+          <input type="number" min="0" max="990" step="10" class="rv-in-total" inputmode="numeric" />
           <button class="btn-sub rv-fill">個数から自動</button>
         </div>
         <div class="rv-check"></div>
@@ -327,11 +328,15 @@ function editMode(body, page, rawCanvas, ctx, close) {
     prodWrap.appendChild(row);
   }
 
-  // 合計欄
+  // 合計点数。交換票の合計欄は「点数÷10」を2桁（total_2=十の位, total_1=一の位）で
+  // 記入する形式なので、入力は点数で受けて ÷10 した値を桁に反映する。
   const totalIn = body.querySelector(".rv-in-total");
-  totalIn.value = toInt(P.total_2) * 10 + toInt(P.total_1) || "";
+  const totalPoints = () => (toInt(P.total_2) * 10 + toInt(P.total_1)) * 10;
+  totalIn.value = totalPoints() || "";
   totalIn.addEventListener("input", () => {
-    setTwoDigit(P, "total", parseInt(totalIn.value, 10) || 0);
+    const box = Math.max(0, Math.min(99, Math.floor((parseInt(totalIn.value, 10) || 0) / 10)));
+    P.total_1 = box % 10;
+    P.total_2 = Math.floor(box / 10);
     recompute();
     redraw("total_1");
   });
@@ -343,7 +348,7 @@ function editMode(body, page, rawCanvas, ctx, close) {
 
   body.querySelector(".rv-fill").onclick = () => {
     fillTotalFromQty(P, ctx.products);
-    totalIn.value = toInt(P.total_2) * 10 + toInt(P.total_1) || "";
+    totalIn.value = totalPoints() || "";
     recompute();
     redraw("total_1");
   };
@@ -356,8 +361,8 @@ function editMode(body, page, rawCanvas, ctx, close) {
     const v = validatePage(P, ctx.products, maxDays);
     curValid = v;
     checkEl.innerHTML =
-      `<div>計算合計 <b>${v.computed}</b> 点（÷10 = ${v.computedTens}）</div>` +
-      `<div>記入合計欄 <b>${v.totalBox}</b> → 検算 ` +
+      `<div>個数からの計算合計 <b>${v.computed}</b> 点</div>` +
+      `<div>記入された合計 <b>${v.totalBox * 10}</b> 点 → 検算 ` +
       (v.checksumOk ? `<span class="ok">✓ 一致</span>` : `<span class="err">✗ 不一致</span>`) + `</div>`;
     dateFlag.innerHTML = v.dateOk ? `<span class="ok">✓</span>` : `<span class="err">✗ 範囲外</span>`;
   }
@@ -372,6 +377,9 @@ function editMode(body, page, rawCanvas, ctx, close) {
     if (ctx.onUpdate) ctx.onUpdate(page);
     close();
   };
+
+  // 日付 → 各商品 → 合計点数 を Enter / 矢印キーで移動できるようにする
+  bindGridNav([dateIn, ...prodWrap.querySelectorAll("input"), totalIn], 1);
 
   redraw(null);
   recompute();

@@ -5,6 +5,7 @@ import { computeLedger, computeDiffs, buildAdjustmentPages } from "../ledger.js"
 import { toInt, computeTotalScore, daysInMonth } from "../validate.js";
 import { downloadReport } from "../excelReport.js";
 import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from "../reorder.js";
+import { bindGridNav } from "../keynav.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -283,4 +284,7 @@ export async function show() {
       detailKey = detailKey === a.dataset.key ? null : a.dataset.key;
       await show();
     }));
+
+  // 実棚数の入力欄を Enter / 矢印キーで移動できるようにする
+  bindGridNav([...el().querySelectorAll("input[data-phys]")], 1);
 }
