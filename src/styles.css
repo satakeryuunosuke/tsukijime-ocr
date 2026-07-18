@@ -261,6 +261,30 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
 .needfix-title { margin: 0; font-size: 1rem; color: var(--err); }
 .okpages-title { font-size: 1rem; margin: 1rem 0 .5rem; }
 
+/* 保存トースト */
+.app-toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(10px);
+  background: #0f172a; color: #fff; padding: .6rem 1.2rem; border-radius: 999px;
+  font-size: .9rem; font-weight: 600; opacity: 0; transition: opacity .25s, transform .25s;
+  z-index: 2000; box-shadow: 0 6px 20px rgba(0,0,0,.25); pointer-events: none;
+  max-width: calc(100vw - 2rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* レポートプレビュー（Excelレポートの人が見るシートをHTML表で表示） */
+.rp-modal { width: min(1200px, 100%); }
+.rp-body { max-height: calc(100vh - 7rem); overflow: auto; }
+.rp-body h3 { margin: 1.2rem 0 .4rem; font-size: 1rem; }
+.rp-table { border-collapse: collapse; background: #fff; font-size: .8rem; }
+.rp-table th, .rp-table td {
+  border: 1px solid #cbd5e1; padding: .25rem .55rem; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rp-table th { background: #ddebf7; font-weight: 600; text-align: center; }
+.rp-table td:first-child { text-align: left; background: #f8fafc; }
+.rp-bal { background: #f2f2f2; }
+.rp-total td { font-weight: 700; background: #f1f5f9; }
+
 /* ホーム: 次にやること */
 .home-next {
   display: block; background: linear-gradient(135deg, #0ea5e9, #0369a1);

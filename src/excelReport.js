@@ -82,12 +82,23 @@ function addNotesSheet(wb, month, products, ledger) {
     }
     ws.addRow(cells);
   }
-  borderRows(ws, 3, 3 + ledger.maxDays, 1 + notes.length * sub.length);
+  // 合計行（入荷・現金・口座・交換・ポイントの月計。残は合計しない）
+  const totCells = ["合計"];
+  for (const p of notes) {
+    const rows = ledger.rows[p.key];
+    const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
+    totCells.push(sum("arrival"), sum("cash"), sum("debit"), sum("exchange"), sum("point"), "");
+  }
+  const totRow = ws.addRow(totCells);
+  totRow.font = { bold: true };
+  totRow.eachCell((c) => { c.fill = BAL_FILL; });
+
+  borderRows(ws, 3, totRow.number, 1 + notes.length * sub.length);
   // 残の列と繰越行は薄グレーで見やすく
   ws.getRow(3).font = { bold: true };
   for (let i = 0; i < notes.length; i++) {
     const col = 1 + (i + 1) * sub.length;
-    for (let r = 3; r <= 3 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
+    for (let r = 3; r <= totRow.number; r++) ws.getCell(r, col).fill = BAL_FILL;
   }
   ws.getColumn(1).width = 6;
   for (let c = 2; c <= 1 + notes.length * sub.length; c++) ws.getColumn(c).width = 8;
@@ -131,11 +142,22 @@ function addGoodsSheets(wb, month, products, ledger) {
       }
       ws.addRow(cells);
     }
-    borderRows(ws, 3, 3 + ledger.maxDays, 1 + chunk.length * sub.length);
+    // 合計行（入荷・交換の月計。残は合計しない）
+    const totCells = ["合計"];
+    for (const p of chunk) {
+      const rows = ledger.rows[p.key];
+      const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
+      totCells.push(sum("arrival"), sum("exchange"), "");
+    }
+    const totRow = ws.addRow(totCells);
+    totRow.font = { bold: true };
+    totRow.eachCell((c) => { c.fill = BAL_FILL; });
+
+    borderRows(ws, 3, totRow.number, 1 + chunk.length * sub.length);
     ws.getRow(3).font = { bold: true };
     for (let j = 0; j < chunk.length; j++) {
       const col = 1 + (j + 1) * sub.length;
-      for (let r = 3; r <= 3 + ledger.maxDays; r++) ws.getCell(r, col).fill = BAL_FILL;
+      for (let r = 3; r <= totRow.number; r++) ws.getCell(r, col).fill = BAL_FILL;
     }
     ws.getColumn(1).width = 6;
     for (let c = 2; c <= 1 + chunk.length * sub.length; c++) ws.getColumn(c).width = 9;

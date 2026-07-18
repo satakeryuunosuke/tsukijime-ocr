@@ -3,6 +3,7 @@
 import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
+import { toast } from "../toast.js";
 
 let app = null;
 let selectedDay = 1;
@@ -19,7 +20,8 @@ async function saveDay() {
   if (any) month.arrivals[selectedDay] = data;
   else delete month.arrivals[selectedDay];
   await putMonth(month);
-  await show();
+  toast(any ? `${selectedDay}日の入庫を保存しました ✓` : `${selectedDay}日の入庫記録を削除しました`);
+  app.navigate("home");
 }
 
 export function init(appRef) { app = appRef; }

@@ -4,6 +4,7 @@ import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { noteProducts, SPECIAL_METHODS } from "../ledger.js";
 import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
+import { toast } from "../toast.js";
 
 let app = null;
 let lastDay = null;    // 追加後も日付・種別の選択を保持する
@@ -33,7 +34,8 @@ async function addEntry() {
     createdAt: new Date().toISOString(),
   });
   await putMonth(month);
-  await show();
+  toast(`${day}日の${methodName(method)}でのノート購入を記録しました ✓`);
+  app.navigate("home");
 }
 
 async function deleteEntry(id) {

@@ -4,8 +4,10 @@ import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { computeLedger, computeDiffs, buildAdjustmentPages } from "../ledger.js";
 import { toInt, computeTotalScore, daysInMonth } from "../validate.js";
 import { downloadReport } from "../excelReport.js";
+import { openReportPreview } from "../reportPreview.js";
 import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from "../reorder.js";
 import { bindGridNav } from "../keynav.js";
+import { toast } from "../toast.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -20,7 +22,16 @@ async function savePhysical() {
   });
   month.physicalCount = data;
   await putMonth(month);
-  await show();
+  // 差異があればこの画面に留まって内容を確認してもらう。差異ゼロならホームへ戻る。
+  const master = await getMaster(month.masterVersion);
+  const { shortages, surpluses } = computeDiffs(month, master.products);
+  if (Object.keys(shortages).length || Object.keys(surpluses).length) {
+    toast("実棚数を保存しました。差異があります — 内容を確認してください");
+    await show();
+  } else {
+    toast("実棚数を保存しました ✓ 差異はありません");
+    app.navigate("home");
+  }
 }
 
 // 差異を調整記録で解消する。不足 → 交換ページを自動生成、余剰 → 指定日の入庫に加算。
@@ -251,6 +262,7 @@ export async function show() {
       <div class="row-actions">
         <button id="clSavePhys" class="btn">実棚数を保存</button>
         <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
+        <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
       </div>
     </div>
     ${adjustPanel(month, products)}
@@ -273,6 +285,7 @@ export async function show() {
       e.target.disabled = false;
     }
   });
+  el().querySelector("#clPreview").addEventListener("click", () => openReportPreview(month, products));
   const adjBtn = el().querySelector("#adjApply");
   if (adjBtn) adjBtn.addEventListener("click", applyAdjustment);
   const toggle = el().querySelector("#clTogglePages");

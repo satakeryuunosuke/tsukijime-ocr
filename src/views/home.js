@@ -1,5 +1,7 @@
 // ホームタブ。対象年月の作業進捗と各工程へのショートカットを表示する。
 import { ensureMonth, getMaster } from "../db.js";
+import { downloadReport } from "../excelReport.js";
+import { openReportPreview } from "../reportPreview.js";
 
 let app = null;
 const el = () => document.getElementById("view-home");
@@ -28,11 +30,17 @@ function nextAction(month) {
     return { view: "carryover", cls: "", title: "繰越在庫を入力する", desc: "月初時点の在庫数を入力します。前月の帳簿残から自動入力できます。" };
   if (!month.pages.length)
     return { view: "reader", cls: "", title: "交換票を読み取る", desc: "交換票のスキャンPDFをAIで読み取り、確認して保存します。月内は何回かに分けてOK。" };
+  // 現金のつじつまチェックはノート購入の記録を使うため、現金入力より先に案内する
+  if (!(month.cash && month.cash.closing) && !(month.specials || []).length)
+    return {
+      view: "specials", cls: "", title: "ノート購入を記録する",
+      desc: "現金・口座振替・栄冠ポイントでのノート購入を記録します。現金管理のつじつまチェックはこの記録を使うので、月末の現金入力より先に済ませてください（この月の購入がなければ、そのまま「5. 現金管理」へ進んでOK。グッズが届いた月は「3. 入庫」の記録もお忘れなく）。",
+    };
   if (!(month.cash && month.cash.closing))
     return { view: "cash", cls: "", title: "月末の現金を数えて入力する", desc: "金庫の現金を金種別に数えて入力すると、売上とのつじつまを自動チェックします。" };
   if (month.physicalCount === null)
     return { view: "closing", cls: "", title: "実棚数を入力して棚卸する", desc: "実際に棚を数えて入力し、帳簿残との差異を確認します。" };
-  return { view: "closing", cls: "done", title: "この月の作業は完了しています ✓", desc: "月締めタブからExcelレポートを出力して本部に報告してください。" };
+  return { view: "closing", cls: "done", title: "この月の作業は完了しています ✓", desc: "下のボタンからExcelレポートをダウンロード（またはプレビュー）して本部に報告してください。" };
 }
 
 export async function show() {
@@ -62,6 +70,11 @@ export async function show() {
       <div class="hn-title">${na.title}</div>
       <p class="hn-desc">${na.desc}</p>
     </a>
+    ${physDone && master ? `
+    <div class="row-actions">
+      <button id="homeReport" class="btn btn-secondary">Excelレポート（report_${ym}.xlsx）</button>
+      <button id="homePreview" class="btn-sub">レポートをブラウザで見る</button>
+    </div>` : ""}
     <p class="view-sub">上から順に進めると月締めが完了します。使用マスタ: v${month.masterVersion}${master ? `（${master.label || ""}・商品${master.products.length}件）` : ""}</p>
     <div class="home-grid">
       ${card("carryover", "1. 繰越在庫", carryoverDone ? "入力済み ✓" : "未入力",
@@ -81,4 +94,19 @@ export async function show() {
       <a href="#masters">商品の入れ替え・交換票の印刷 →</a>
       <a href="#backup">バックアップ・引き継ぎ（データ管理） →</a>
     </div>`;
+
+  const repBtn = el().querySelector("#homeReport");
+  if (repBtn) repBtn.addEventListener("click", async () => {
+    repBtn.disabled = true;
+    try {
+      await downloadReport(month, master.products);
+    } catch (err) {
+      alert("レポート生成に失敗しました: " + err.message);
+      console.error(err);
+    } finally {
+      repBtn.disabled = false;
+    }
+  });
+  const prevBtn = el().querySelector("#homePreview");
+  if (prevBtn) prevBtn.addEventListener("click", () => openReportPreview(month, master.products));
 }

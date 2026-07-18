@@ -10,6 +10,7 @@ import {
 } from "../cash.js";
 import { downloadCsv } from "../csv.js";
 import { bindGridNav } from "../keynav.js";
+import { toast } from "../toast.js";
 
 let app = null;
 const el = () => document.getElementById("view-cash");
@@ -69,7 +70,8 @@ async function saveCash() {
     withdrawals: cash.withdrawals, // 持ち出しの記録は保持する
   };
   await putMonth(month);
-  await show();
+  toast("現金の枚数を保存しました ✓");
+  app.navigate("home");
 }
 
 // 前月の月末金種を今月の月初欄へ流し込む

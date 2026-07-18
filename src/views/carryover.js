@@ -4,6 +4,7 @@ import { ensureMonth, putMonth, getMonth, getMaster } from "../db.js";
 import { computeLedger } from "../ledger.js";
 import { toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
+import { toast } from "../toast.js";
 
 let app = null;
 const el = () => document.getElementById("view-carryover");
@@ -23,15 +24,12 @@ function collectInputs() {
   return data;
 }
 
-async function save(silent = false) {
+async function save() {
   const month = await ensureMonth(app.ym);
   month.carryover = collectInputs();
   await putMonth(month);
-  if (!silent) {
-    const note = el().querySelector("#coSavedNote");
-    note.textContent = "保存しました ✓";
-    setTimeout(() => { note.textContent = ""; }, 2000);
-  }
+  toast("繰越在庫を保存しました ✓");
+  app.navigate("home");
 }
 
 // 前月の帳簿残 or 実棚数を各入力欄へ流し込む
@@ -81,7 +79,7 @@ export async function show() {
     </table>
     <div class="row-actions">
       <button id="coSave" class="btn">保存</button>
-      <span id="coSavedNote" class="ok"></span>
+      <span class="view-sub">保存するとホームに戻ります。</span>
     </div>`;
 
   el().querySelector("#coSave").addEventListener("click", () => save());
