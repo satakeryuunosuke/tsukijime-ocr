@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git rev-list *)",
+      "Bash(git cat-file *)",
+      "Bash(sort -k3 -n -r)",
+      "Bash(git filter-repo *)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(git branch *)",
+      "Bash(find \"/c/Users/sd23048/AppData/Roaming/Python/Python312/Scripts\" -iname \"git-filter-repo*\" 2>&1)",
+      "Bash(\"/c/Users/sd23048/AppData/Roaming/Python/Python312/Scripts/git-filter-repo.exe\" --path dist/ --path build/ --path __pycache__/ --path app.spec --invert-paths --force)",
+      "Bash(gh api *)",
+      "PowerShell(gh api repos/satakeryuunosuke/tsukijime-ocr/pages 2>&1)",
+      "WebFetch(domain:satakeryuunosuke.github.io)",
+      "Bash(git ls-remote *)",
+      "Bash(git check-ignore *)",
+      "Bash(curl -sf -o /dev/null \"https://satakeryuunosuke.github.io/tsukijime-ocr/public/assets/model/model.json?v=$\\(date +%s\\)\")",
+      "Bash(curl -sf -o /dev/null \"https://satakeryuunosuke.github.io/tsukijime-ocr/public/assets/product_list.csv?v=$\\(date +%s\\)\")",
+      "Bash(git switch *)",
+      "Bash(git -C \"C:/Users/sd23048/Desktop/AI_int_tsukijime_system\" log --oneline -15)",
+      "PowerShell(git add src/reorder.js src/views/closing.js sw.js HANDOVER.md .claude/launch.json)",
+      "Bash(git ls-tree *)",
+      "Bash(grep '\\\\.py$')",
+      "Bash(grep -E '\\\\.\\(py|txt|h5|csv|json|xlsx|ico|md\\)$')",
+      "PowerShell($desktopPath = [Environment]::GetFolderPath\\(\"Desktop\"\\); $newFolder = Join-Path $desktopPath \"tsukijime_python_version\"; if \\(-not \\(Test-Path $newFolder\\)\\) { New-Item -ItemType Directory -Path $newFolder -Force | Out-Null }; Write-Host \"Created folder: $newFolder\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(grep -E '\\\\.py$|app\\\\.')",
+      "PowerShell(git push github-pwa main)"
+    ]
+  }
+}
