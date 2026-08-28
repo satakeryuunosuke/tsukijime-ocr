@@ -6,6 +6,7 @@ import { buildCsv, buildAggregatedCsv, downloadCsv } from "../csv.js";
 import { validatePage, daysInMonth, qtyOf, toInt } from "../validate.js";
 import { openReview } from "../review.js";
 import { ensureMonth, putMonth, getMaster, getSetting } from "../db.js";
+import { toast } from "../toast.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
@@ -83,13 +84,21 @@ function fieldLabel(name) {
   return p ? p.name : name;
 }
 
+// 2桁モード（上2桁照合）の時は total_0（一の位）の低信頼度を無視する
+function getEffectiveLow(page) {
+  if (!page || !page.lowConfidence) return [];
+  const digits = currentCtx ? Number(currentCtx.checksumDigits) : 2;
+  return page.lowConfidence.filter((k) => !(digits === 2 && k === "total_0"));
+}
+
 function statusHtml(page) {
   if (!page.ok) return `<span class="err">✗ マーカー検出失敗（クリックで手動補正）</span>`;
   const v = page.valid || {};
   if (v.checksumOk === false) return `<span class="err">✗ 合計不一致（要確認）</span>`;
   if (v.dateOk === false) return `<span class="err">✗ 日付不正（要確認）</span>`;
-  if (page.lowConfidence && page.lowConfidence.length) {
-    const labels = [...new Set(page.lowConfidence.map(fieldLabel))];
+  const effectiveLow = getEffectiveLow(page);
+  if (effectiveLow.length) {
+    const labels = [...new Set(effectiveLow.map(fieldLabel))];
     return `<span class="warn">⚠ 低信頼度: ${labels.join("、")}</span>`;
   }
   if (page.autoTuned)
@@ -97,12 +106,20 @@ function statusHtml(page) {
   return `<span class="ok">✓ OK</span>`;
 }
 
+// マーカー成功かつ検算・日付OKだが、低信頼度項目だけがあるページ
+function isLowConfidenceOnly(p) {
+  if (!p.ok) return false;
+  const v = p.valid || {};
+  if (v.checksumOk === false || v.dateOk === false) return false;
+  return getEffectiveLow(p).length > 0;
+}
+
 // 状態列に「✓ OK」（チェックマーク）が表示される行かどうか。
 function isFullyOk(page) {
   if (!page.ok) return false;
   const v = page.valid || {};
   if (v.checksumOk === false || v.dateOk === false) return false;
-  if (page.lowConfidence && page.lowConfidence.length) return false;
+  if (getEffectiveLow(page).length) return false;
   return true;
 }
 
@@ -137,7 +154,8 @@ function renderResults() {
   const ok = pages.filter((p) => p.ok);
   const markerFail = pages.filter((p) => !p.ok);
   const needFix = ok.filter((p) => p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false));
-  const lowConf = ok.filter((p) => p.lowConfidence && p.lowConfidence.length);
+  const lowConf = ok.filter((p) => getEffectiveLow(p).length);
+  const lowOnlyPages = pages.filter(isLowConfidenceOnly);
 
   $("summary").innerHTML =
     `<b>${pages.length}</b> ページ / 認識 <b>${ok.length}</b> / ` +
@@ -151,6 +169,14 @@ function renderResults() {
   $("needFixWrap").hidden = attention.length === 0;
   $("needFixBody").innerHTML = attention.join("");
   $("fixAllBtn").textContent = `要対応 ${attention.length} 件をまとめて修正`;
+
+  // 低信頼度のみのページを一括承認するボタン
+  const approveLowBtn = $("approveLowBtn");
+  if (approveLowBtn) {
+    approveLowBtn.hidden = lowOnlyPages.length === 0;
+    approveLowBtn.textContent = `✓ 低信頼度のみの ${lowOnlyPages.length} 件をまとめて承認`;
+  }
+
   $("resultBody").innerHTML = done.length ? done.join("")
     : `<tr><td colspan="5" class="muted">確定したページはまだありません。</td></tr>`;
 
@@ -298,6 +324,19 @@ async function fixAllSequential() {
   }
 }
 
+// 低信頼度のみのページを一括承認（低信頼度フラグをクリアして確定扱いに）
+async function onApproveLowOnly() {
+  const targets = pages.filter(isLowConfidenceOnly);
+  if (!targets.length) return;
+  const count = targets.length;
+  targets.forEach((p) => {
+    p.lowConfidence = [];
+  });
+  renderResults();
+  await saveOkPagesToMonth();
+  toast(`低信頼度のみの ${count} ページを一括承認しました`);
+}
+
 // 一度だけ呼ばれる初期化（イベント紐付け）
 export function init(appRef) {
   app = appRef;
@@ -310,6 +349,8 @@ export function init(appRef) {
   $("resultBody").addEventListener("click", onRowClick);
   $("needFixBody").addEventListener("click", onRowClick);
   $("fixAllBtn").addEventListener("click", fixAllSequential);
+  const approveLowBtn = $("approveLowBtn");
+  if (approveLowBtn) approveLowBtn.addEventListener("click", onApproveLowOnly);
 
   $("fileInput").addEventListener("change", (e) => {
     if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files));

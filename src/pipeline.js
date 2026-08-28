@@ -24,9 +24,13 @@ export async function recognizePage(srcMat, ctx) {
   deleteRois(rois);
   tMat.delete();
 
-  const lowConfidence = Object.keys(predictions)
+  let lowConfidence = Object.keys(predictions)
     .filter((k) => k.endsWith("_low_confidence_flag") && predictions[k] === true)
     .map((k) => k.replace("_low_confidence_flag", ""));
+
+  if (Number(ctx?.checksumDigits ?? 2) === 2) {
+    lowConfidence = lowConfidence.filter((k) => k !== "total_0");
+  }
 
   return { ok: true, coords, predictions, lowConfidence, autoTuned };
 }

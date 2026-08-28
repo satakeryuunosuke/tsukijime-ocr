@@ -66,7 +66,10 @@
         <section id="needFixWrap" class="needfix-panel" hidden>
           <div class="results-head">
             <h3 class="needfix-title">⚠ 対応が必要な読み取り結果</h3>
-            <button id="fixAllBtn" class="btn">まとめて修正</button>
+            <div class="needfix-actions">
+              <button id="approveLowBtn" class="btn-approve-low" hidden>✓ 低信頼度のみのページをまとめて承認</button>
+              <button id="fixAllBtn" class="btn">まとめて修正</button>
+            </div>
           </div>
           <table class="result-table">
             <thead>

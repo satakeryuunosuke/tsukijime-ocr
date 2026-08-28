@@ -9,6 +9,45 @@ import { drawOverlay } from "./overlay.js";
 import { validatePage, qtyOf, toInt, fillTotalFromQty } from "./validate.js";
 import { bindGridNav } from "./keynav.js";
 
+// ROI名（date_0, notes_Y_1 など）→ 日本語の項目名
+function fieldLabel(name, products = []) {
+  if (name.startsWith("date")) return "日付";
+  if (name.startsWith("total")) return "合計";
+  const key = name.replace(/_[012]$/, "");
+  const p = products.find((x) => x.key === key);
+  return p ? p.name : name;
+}
+
+// 理由バッジHTMLを生成（マーカー失敗、合計不一致、日付不正、低信頼度項目など）
+function getStatusBadgeHtml(page, ctx, currentValid = null) {
+  if (!page.coords && !page.ok) {
+    return `<span class="rv-badge err">✗ マーカー検出失敗</span>`;
+  }
+  const v = currentValid !== null ? currentValid : page.valid;
+  const reasons = [];
+  if (v) {
+    if (v.checksumOk === false) {
+      reasons.push({ cls: "err", text: `✗ 合計不一致（計算: ${v.computed}点 / 記入: ${v.totalBox}点）` });
+    }
+    if (v.dateOk === false) {
+      const dStr = v.dateValue ? `${v.dateValue}日` : "未入力";
+      reasons.push({ cls: "err", text: `✗ 日付不正（${dStr}）` });
+    }
+  }
+  const isDigits2 = Number(ctx?.checksumDigits ?? 2) === 2;
+  const effectiveLow = (page.lowConfidence || []).filter((k) => !(isDigits2 && k === "total_0"));
+  if (effectiveLow.length) {
+    const labels = [...new Set(effectiveLow.map((n) => fieldLabel(n, ctx.products || [])))];
+    reasons.push({ cls: "warn", text: `⚠ 低信頼度: ${labels.join("、")}` });
+  }
+
+  if (reasons.length > 0) {
+    return reasons.map((r) => `<span class="rv-badge ${r.cls}">${r.text}</span>`).join(" ");
+  }
+
+  return `<span class="rv-badge ok">✓ OK</span>`;
+}
+
 // page: { name, ok, coords, predictions, lowConfidence }
 // ctx:  { roiRows, products, model, cfg, ym, renderRaw, onUpdate }
 export function openReview(page, ctx) {
@@ -18,12 +57,20 @@ export function openReview(page, ctx) {
     shell.innerHTML = `
       <div class="rv-modal">
         <div class="rv-head">
-          <span class="rv-title"></span>
+          <div class="rv-title-wrap">
+            <span class="rv-title"></span>
+            <span class="rv-status-badge"></span>
+          </div>
           <button class="rv-close" title="閉じる">✕</button>
         </div>
         <div class="rv-body"></div>
       </div>`;
     shell.querySelector(".rv-title").textContent = page.name;
+    const badgeEl = shell.querySelector(".rv-status-badge");
+    const updateBadge = (curValid = null) => {
+      badgeEl.innerHTML = getStatusBadgeHtml(page, ctx, curValid);
+    };
+    updateBadge();
     document.body.appendChild(shell);
 
     const body = shell.querySelector(".rv-body");
@@ -37,13 +84,14 @@ export function openReview(page, ctx) {
     const onCoords = async (coords) => {
       page.coords = coords;
       await recognizeWithCoords(page, rawCanvas, ctx);
-      editMode(body, page, rawCanvas, ctx, close);
+      updateBadge();
+      editMode(body, page, rawCanvas, ctx, close, updateBadge);
     };
     if (!page.coords) {
       // マーカー検出失敗: まずパラメータ調整で自動検出を試す（手動タップにも切替可）
       paramMode(body, rawCanvas, ctx, onCoords);
     } else {
-      editMode(body, page, rawCanvas, ctx, close);
+      editMode(body, page, rawCanvas, ctx, close, updateBadge);
     }
   });
 }
@@ -56,9 +104,13 @@ async function recognizeWithCoords(page, rawCanvas, ctx) {
   src.delete();
   const rois = extractRois(tMat, ctx.roiRows);
   page.predictions = await predictNumbers(rois, ctx.model, ctx.cfg);
-  page.lowConfidence = Object.keys(page.predictions)
+  let lowConfidence = Object.keys(page.predictions)
     .filter((k) => k.endsWith("_low_confidence_flag") && page.predictions[k] === true)
     .map((k) => k.replace("_low_confidence_flag", ""));
+  if (Number(ctx?.checksumDigits ?? 2) === 2) {
+    lowConfidence = lowConfidence.filter((k) => k !== "total_0");
+  }
+  page.lowConfidence = lowConfidence;
   deleteRois(rois);
   tMat.delete();
 }
@@ -228,7 +280,7 @@ function cornerMode(body, rawCanvas, ctx, onDone) {
 }
 
 // ---- 編集モード ----
-function editMode(body, page, rawCanvas, ctx, close) {
+function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   const cv = window.cv;
   // 台形補正画像を1枚だけ作ってオフスクリーンに保持
   const src = cv.imread(rawCanvas);
@@ -238,6 +290,12 @@ function editMode(body, page, rawCanvas, ctx, close) {
   cv.imshow(tCanvas, tMat);
   tMat.delete();
 
+  const isDigits2 = Number(ctx?.checksumDigits ?? 2) === 2;
+  const isDateLow = page.lowConfidence && (page.lowConfidence.includes("date_0") || page.lowConfidence.includes("date_1"));
+  const isTotalLow = (page.lowConfidence || []).some((k) =>
+    isDigits2 ? (k === "total_1" || k === "total_2") : (k === "total_0" || k === "total_1" || k === "total_2")
+  );
+
   body.innerHTML = `
     <div class="rv-edit">
       <div class="rv-img">
@@ -246,13 +304,13 @@ function editMode(body, page, rawCanvas, ctx, close) {
       </div>
       <div class="rv-form">
         <div class="rv-field rv-date">
-          <label>日付（日）</label>
+          <label>日付（日）${isDateLow ? ' <span class="rv-low-tag">⚠ 低信頼度</span>' : ""}</label>
           <input type="number" min="1" max="31" class="rv-in-date" inputmode="numeric" />
           <span class="rv-date-flag"></span>
         </div>
         <div class="rv-products"></div>
         <div class="rv-field rv-total">
-          <label>合計点数</label>
+          <label>合計点数${isTotalLow ? ' <span class="rv-low-tag">⚠ 低信頼度</span>' : ""}</label>
           <input type="number" min="0" max="999" step="1" class="rv-in-total" inputmode="numeric" />
           <button class="btn-sub rv-fill">個数から自動</button>
         </div>
@@ -314,9 +372,10 @@ function editMode(body, page, rawCanvas, ctx, close) {
   // 商品フォーム
   const prodWrap = body.querySelector(".rv-products");
   for (const p of ctx.products) {
+    const isLow = page.lowConfidence && (page.lowConfidence.includes(`${p.key}_0`) || page.lowConfidence.includes(`${p.key}_1`));
     const row = document.createElement("div");
     row.className = "rv-prow";
-    row.innerHTML = `<label>${p.name} <small>(${p.points}点)</small></label>
+    row.innerHTML = `<label>${p.name} <small>(${p.points}点)</small>${isLow ? ' <span class="rv-low-tag">⚠ 低信頼度</span>' : ""}</label>
       <input type="number" min="0" max="99" inputmode="numeric" data-key="${p.key}" />`;
     const inp = row.querySelector("input");
     inp.value = qtyOf(P, p.key) || "";
@@ -372,6 +431,7 @@ function editMode(body, page, rawCanvas, ctx, close) {
       `<div>記入された合計 <b>${v.totalBox}</b> 点${modeNote} → 検算 ` +
       (v.checksumOk ? `<span class="ok">✓ 一致</span>` : `<span class="err">✗ 不一致</span>`) + `</div>`;
     dateFlag.innerHTML = v.dateOk ? `<span class="ok">✓</span>` : `<span class="err">✗ 範囲外</span>`;
+    if (updateBadge) updateBadge(v);
   }
 
   body.querySelector(".rv-cancel").onclick = close;
