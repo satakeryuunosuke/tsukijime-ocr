@@ -71,14 +71,14 @@ function addNotesSheet(wb, month, products, ledger) {
   styleHeaderRow(ws.getRow(2));
 
   const coCells = ["繰越"];
-  for (const p of notes) coCells.push("", "", "", "", "", toInt(co[p.key]));
+  for (const p of notes) coCells.push(null, null, null, null, null, toInt(co[p.key]));
   ws.addRow(coCells);
 
   for (let d = 1; d <= ledger.maxDays; d++) {
     const cells = [d];
     for (const p of notes) {
       const r = ledger.rows[p.key][d - 1];
-      cells.push(r.arrival || "", r.cash || "", r.debit || "", r.exchange || "", r.point || "", r.balance);
+      cells.push(r.arrival || null, r.cash || null, r.debit || null, r.exchange || null, r.point || null, r.balance);
     }
     ws.addRow(cells);
   }
@@ -87,7 +87,7 @@ function addNotesSheet(wb, month, products, ledger) {
   for (const p of notes) {
     const rows = ledger.rows[p.key];
     const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
-    totCells.push(sum("arrival"), sum("cash"), sum("debit"), sum("exchange"), sum("point"), "");
+    totCells.push(sum("arrival"), sum("cash"), sum("debit"), sum("exchange"), sum("point"), null);
   }
   const totRow = ws.addRow(totCells);
   totRow.font = { bold: true };
@@ -131,14 +131,14 @@ function addGoodsSheets(wb, month, products, ledger) {
     styleHeaderRow(ws.getRow(2));
 
     const coCells = ["繰越"];
-    for (const p of chunk) coCells.push("", "", toInt(co[p.key]));
+    for (const p of chunk) coCells.push(null, null, toInt(co[p.key]));
     ws.addRow(coCells);
 
     for (let d = 1; d <= ledger.maxDays; d++) {
       const cells = [d];
       for (const p of chunk) {
         const r = ledger.rows[p.key][d - 1];
-        cells.push(r.arrival || "", r.exchange || "", r.balance);
+        cells.push(r.arrival || null, r.exchange || null, r.balance);
       }
       ws.addRow(cells);
     }
@@ -147,7 +147,7 @@ function addGoodsSheets(wb, month, products, ledger) {
     for (const p of chunk) {
       const rows = ledger.rows[p.key];
       const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
-      totCells.push(sum("arrival"), sum("exchange"), "");
+      totCells.push(sum("arrival"), sum("exchange"), null);
     }
     const totRow = ws.addRow(totCells);
     totRow.font = { bold: true };
@@ -181,12 +181,12 @@ function addStocktakeSheet(wb, month, products, ledger) {
     const rows = ledger.rows[p.key];
     const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
     const book = ledger.closing[p.key];
-    const physV = month.physicalCount ? toInt(phys[p.key]) : null;
+    const physV = month.physicalCount && phys[p.key] !== undefined && phys[p.key] !== "" ? toInt(phys[p.key]) : null;
     const diff = physV === null ? null : physV - book;
     const row = ws.addRow([
       p.name, toInt(co[p.key]), sum("arrival"), sum("exchange"),
-      isNote(p) ? sum("cash") : "", isNote(p) ? sum("debit") : "", isNote(p) ? sum("point") : "",
-      book, physV === null ? "" : physV, diff === null ? "" : diff,
+      isNote(p) ? sum("cash") : null, isNote(p) ? sum("debit") : null, isNote(p) ? sum("point") : null,
+      book, physV, diff,
     ]);
     if (diff !== null && diff !== 0) {
       row.getCell(10).font = { bold: true, color: { argb: "FFDC2626" } };
@@ -239,7 +239,7 @@ async function addCashSheet(wb, month, products) {
       ws.addRow([
         r.day === 0 ? "月初" : `${r.day}日`,
         ...DENOMS.map((d) => r.counts[d]),
-        r.total, r.sales || "", r.withdrawal || "",
+        r.total, r.sales || null, r.withdrawal || null,
       ]);
     }
     borderRows(ws, headRow.number, ws.rowCount, 1 + DENOMS.length + 3);
