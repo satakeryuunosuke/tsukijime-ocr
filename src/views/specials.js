@@ -35,14 +35,16 @@ async function addEntry() {
   });
   await putMonth(month);
   toast(`${day}日の${methodName(method)}でのノート購入を記録しました ✓`);
-  app.navigate("home");
+  await show();
+  const firstInput = el().querySelector(".sp-notes input[data-key]");
+  if (firstInput) firstInput.focus();
 }
 
 async function deleteEntry(id) {
   const month = await ensureMonth(app.ym);
   const item = month.specials.find((s) => s.id === id);
   if (!item) return;
-  if (!window.confirm(`${item.day}日の${methodName(item.method)}交換の記録を削除しますか？`)) return;
+  if (!window.confirm(`${item.day}日の${methodName(item.method)}購入の記録を削除しますか？`)) return;
   month.specials = month.specials.filter((s) => s.id !== id);
   await putMonth(month);
   await show();

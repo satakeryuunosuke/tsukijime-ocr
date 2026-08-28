@@ -71,7 +71,7 @@ async function saveCash() {
   };
   await putMonth(month);
   toast("現金の枚数を保存しました ✓");
-  app.navigate("home");
+  await show();
 }
 
 // 前月の月末金種を今月の月初欄へ流し込む

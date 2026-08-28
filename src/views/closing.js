@@ -22,16 +22,14 @@ async function savePhysical() {
   });
   month.physicalCount = data;
   await putMonth(month);
-  // 差異があればこの画面に留まって内容を確認してもらう。差異ゼロならホームへ戻る。
   const master = await getMaster(month.masterVersion);
   const { shortages, surpluses } = computeDiffs(month, master.products);
   if (Object.keys(shortages).length || Object.keys(surpluses).length) {
     toast("実棚数を保存しました。差異があります — 内容を確認してください");
-    await show();
   } else {
     toast("実棚数を保存しました ✓ 差異はありません");
-    app.navigate("home");
   }
+  await show();
 }
 
 // 差異を調整記録で解消する。不足 → 交換ページを自動生成、余剰 → 指定日の入庫に加算。

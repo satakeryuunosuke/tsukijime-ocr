@@ -21,7 +21,7 @@ async function saveDay() {
   else delete month.arrivals[selectedDay];
   await putMonth(month);
   toast(any ? `${selectedDay}日の入庫を保存しました ✓` : `${selectedDay}日の入庫記録を削除しました`);
-  app.navigate("home");
+  await show();
 }
 
 export function init(appRef) { app = appRef; }
