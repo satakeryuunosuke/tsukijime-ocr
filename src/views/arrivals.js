@@ -68,21 +68,15 @@ function clearCurrentDayInputs() {
   if (first) first.focus();
 }
 
-function getQuickAddValues(p) {
+function getProductLot(p) {
   const name = p.name || "";
   const key = p.key || "";
-  let lot = 10;
-  if (name.includes("ノート") || key.startsWith("notes_")) lot = 100;
-  else if (name.includes("カド消し") || key.includes("eraser")) lot = 20;
-  else if (name.includes("鉛筆削り") || key.includes("sharpener")) lot = 5;
-  else if (name.includes("下じき") || name.includes("下敷き") || key.includes("pad")) lot = 5;
-  else if (name.includes("ホルダーケース") || key.startsWith("case_")) lot = 6;
-
-  if (lot === 100) return [1, 10, 100];
-  if (lot === 20) return [1, 5, 20];
-  if (lot === 6) return [1, 3, 6];
-  if (lot === 5) return [1, 2, 5];
-  return [1, 5, 10];
+  if (name.includes("ノート") || key.startsWith("notes_")) return 100;
+  if (name.includes("カド消し") || key.includes("eraser")) return 20;
+  if (name.includes("鉛筆削り") || key.includes("sharpener")) return 5;
+  if (name.includes("下じき") || name.includes("下敷き") || key.includes("pad")) return 5;
+  if (name.includes("ホルダーケース") || key.startsWith("case_")) return 6;
+  return 10;
 }
 
 export function init(appRef) { app = appRef; }
@@ -158,7 +152,7 @@ export async function show() {
           ${master.products.map((p) => {
             const val = toInt(dayData[p.key]);
             const hasVal = val > 0;
-            const chips = getQuickAddValues(p);
+            const lot = getProductLot(p);
             return `
               <div class="ar-card ${hasVal ? "has-value" : ""}">
                 <div class="ar-card-head">
@@ -167,7 +161,7 @@ export async function show() {
                 </div>
                 <div class="ar-card-body">
                   <div class="ar-quick-chips">
-                    ${chips.map((num) => `<button type="button" class="ar-chip" data-add="${num}" data-target="${p.key}">+${num}</button>`).join("")}
+                    <button type="button" class="ar-chip" data-add="${lot}" data-target="${p.key}">+${lot}</button>
                   </div>
                   <div class="ar-input-wrap">
                     <input type="number" inputmode="numeric" min="0" data-key="${p.key}" class="ar-input"

@@ -504,23 +504,25 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
 
 .ar-quick-chips {
   display: flex;
-  gap: .2rem;
+  gap: .3rem;
 }
 .ar-chip {
   background: #f1f5f9;
   border: 1px solid var(--border);
-  color: #475569;
-  padding: .2rem .4rem;
-  border-radius: 5px;
-  font-size: .75rem;
-  font-weight: 600;
+  color: #334155;
+  padding: .3rem .6rem;
+  border-radius: 6px;
+  font-size: .82rem;
+  font-weight: 700;
   cursor: pointer;
   user-select: none;
   transition: all .1s;
+  white-space: nowrap;
 }
 .ar-chip:hover {
   background: #e2e8f0;
-  color: var(--text);
+  color: var(--primary-d);
+  border-color: #cbd5e1;
 }
 .ar-chip:active {
   transform: scale(0.95);
