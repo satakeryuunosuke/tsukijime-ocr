@@ -893,3 +893,96 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
   flex-wrap: wrap;
 }
 
+/* 月締め・棚卸のアクションエリア＆領域別カード */
+.stocktake-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: .85rem;
+  flex-wrap: wrap;
+}
+.stocktake-save-hint {
+  font-size: .83rem;
+  color: var(--muted);
+}
+.stocktake-locked-note {
+  margin-top: .75rem;
+  font-size: .85rem;
+  color: var(--muted);
+  background: #f1f5f9;
+  padding: .45rem .8rem;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.closing-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+
+.closing-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.closing-card.report-card {
+  border-left: 4px solid #334155;
+}
+
+.closing-card.lock-card {
+  border-left: 4px solid #0f766e;
+}
+
+.closing-card.lock-card.is-locked {
+  border-left: 4px solid #3b82f6;
+  background: #f8fafc;
+}
+
+.closing-card-header {
+  display: flex;
+  gap: .85rem;
+  align-items: flex-start;
+}
+
+.closing-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: .15rem;
+}
+
+.closing-card-title {
+  margin: 0 0 .3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.closing-card-desc {
+  margin: 0;
+  font-size: .84rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.closing-card-actions {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px dashed var(--border);
+}
+
+

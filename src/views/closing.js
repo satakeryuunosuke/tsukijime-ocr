@@ -339,19 +339,56 @@ export async function show() {
           <div class="lock-meta">確定日時: ${new Date(month.lockedAt || Date.now()).toLocaleString("ja-JP")} ／ 誤操作防止のため編集不可</div>
         </div>
       </div>
-      <button id="clUnlock" class="btn-unlock">🔓 ロックを解除して再編集</button>
+      <button id="clUnlock" class="btn-unlock cl-btn-unlock">🔓 ロックを解除して再編集</button>
     </div>` : "";
 
-  const actionsHtml = isLocked ? `
-    <div class="row-actions">
-      <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
-      <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
-    </div>` : `
-    <div class="row-actions">
+  const stocktakeActionsHtml = isLocked ? `
+    <div class="stocktake-locked-note">🔒 月締め確定（ロック中）のため、実棚数は保護されています。</div>` : `
+    <div class="stocktake-actions">
       <button id="clSavePhys" class="btn">実棚数を保存</button>
-      ${month.physicalCount !== null ? `<button id="clLock" class="btn btn-lock">🔒 月締めを確定してロック</button>` : ""}
-      <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
-      <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
+      <span class="stocktake-save-hint">※ 実棚数を入力したら保存してください。差異の確認や月締め確定ができるようになります。</span>
+    </div>`;
+
+  const closingCardsHtml = `
+    <div class="closing-action-grid">
+      <div class="closing-card report-card">
+        <div class="closing-card-header">
+          <span class="closing-card-icon">📊</span>
+          <div>
+            <h3 class="closing-card-title">月次レポート（帳票出力）</h3>
+            <p class="closing-card-desc">当月の棚卸表・日別交換明細・集計データをExcel形式でダウンロード、またはブラウザ上で確認できます。</p>
+          </div>
+        </div>
+        <div class="closing-card-actions">
+          <button id="clReport" class="btn btn-secondary">📥 Excelレポート（report_${app.ym}.xlsx）</button>
+          <button id="clPreview" class="btn-sub">🔍 レポートをブラウザで見る</button>
+        </div>
+      </div>
+
+      <div class="closing-card lock-card ${isLocked ? "is-locked" : ""}">
+        <div class="closing-card-header">
+          <span class="closing-card-icon">${isLocked ? "🔒" : "🛡️"}</span>
+          <div>
+            <h3 class="closing-card-title">月締めステータス・確定</h3>
+            <p class="closing-card-desc">
+              ${isLocked
+                ? `この月（${formatYm(app.ym)}）は月締め確定（ロック中）です。誤操作防止のためデータが保護されています。`
+                : month.physicalCount !== null
+                  ? "棚卸・集計の確認が完了したら、誤操作防止のため月締めを確定（ロック）します。"
+                  : "実棚数を入力・保存すると、月締めを確定（ロック）できるようになります。"
+              }
+            </p>
+          </div>
+        </div>
+        <div class="closing-card-actions">
+          ${isLocked
+            ? `<button class="btn-unlock cl-btn-unlock">🔓 ロックを解除して再編集</button>`
+            : month.physicalCount !== null
+              ? `<button id="clLock" class="btn btn-lock">🔒 月締めを確定してロック</button>`
+              : `<button class="btn btn-lock" disabled title="先に実棚数を入力・保存してください">🔒 実棚数を保存後に確定可能</button>`
+          }
+        </div>
+      </div>
     </div>`;
 
   el().innerHTML = `
@@ -367,9 +404,10 @@ export async function show() {
           <tbody>${stocktakeRows(products, ledger, month)}</tbody>
         </table>
       </div>
-      ${actionsHtml}
+      ${stocktakeActionsHtml}
     </div>
     ${adjustPanel(month, products)}
+    ${closingCardsHtml}
     ${reorderPanel(month, products, ledger, avgInfo)}
     ${detailTable(products, ledger)}
     <div class="panel">
@@ -381,8 +419,8 @@ export async function show() {
   if (saveBtn) saveBtn.addEventListener("click", savePhysical);
   const lockBtn = el().querySelector("#clLock");
   if (lockBtn) lockBtn.addEventListener("click", lockMonth);
-  const unlockBtn = el().querySelector("#clUnlock");
-  if (unlockBtn) unlockBtn.addEventListener("click", unlockMonth);
+  el().querySelectorAll(".cl-btn-unlock").forEach((btn) =>
+    btn.addEventListener("click", unlockMonth));
 
   el().querySelector("#clReport").addEventListener("click", async (e) => {
     e.target.disabled = true;
