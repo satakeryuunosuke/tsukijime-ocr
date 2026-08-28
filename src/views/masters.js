@@ -11,6 +11,7 @@ import { parseFormXlsx, autoAssign, schematicCanvas, insetRoi } from "../xlsxFor
 import { downloadCsv } from "../csv.js";
 import { toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
+import { formatYm, parseYm, nextYm } from "../dateUtils.js";
 
 const ASSETS = "public/assets/";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -24,13 +25,6 @@ let draftRoiSource = null; // 'xlsx' | 'scan'
 let draftFormB64 = null;   // アップロードされた交換票（base64）
 let draftFormName = null;
 const el = () => document.getElementById("view-masters");
-
-function nextYm(ym) {
-  let y = parseInt(ym.slice(0, 4), 10);
-  let m = parseInt(ym.slice(4, 6), 10) + 1;
-  if (m > 12) { m = 1; y++; }
-  return `${y}${String(m).padStart(2, "0")}`;
-}
 
 function monthHasData(m) {
   return !!(m.pages.length || m.carryover || Object.keys(m.arrivals || {}).length ||
@@ -184,8 +178,9 @@ async function onUploadFormXlsx(file) {
 
 async function saveDraft() {
   collectDraftInputs();
-  const effectiveFrom = el().querySelector("#mstEffective").value.trim();
-  if (!/^\d{6}$/.test(effectiveFrom)) { alert("適用開始月は YYYYMM 形式（例: 202608）で入力してください。"); return; }
+  const rawEff = el().querySelector("#mstEffective").value.trim();
+  const effectiveFrom = parseYm(rawEff);
+  if (!effectiveFrom) { alert("適用開始月は「YYYY年MM月」形式（例: 2026年08月）で入力してください。"); return; }
   if (!validateDraftProducts()) return;
 
   const latest = (await getAllMasters()).pop();
@@ -225,7 +220,7 @@ async function saveDraft() {
   const version = await nextMasterVersion();
   await putMaster({
     version,
-    label: `v${version}（${effectiveFrom}〜）`,
+    label: `v${version}（${formatYm(effectiveFrom)}〜）`,
     effectiveFrom,
     createdAt: new Date().toISOString(),
     products,
@@ -340,9 +335,9 @@ export async function show() {
     <tr ${m.version === month.masterVersion ? 'class="row-active"' : ""}>
       <td>v${m.version}</td>
       <td>${m.label || ""}</td>
-      <td>${m.effectiveFrom === "000000" ? "（最初から）" : m.effectiveFrom + "〜"}</td>
+      <td>${m.effectiveFrom === "000000" ? "（最初から）" : formatYm(m.effectiveFrom) + "〜"}</td>
       <td>${m.products.length} 商品</td>
-      <td>${m.version === month.masterVersion ? `<b class="ok">✓ ${app.ym}で使用中</b>` : ""}</td>
+      <td>${m.version === month.masterVersion ? `<b class="ok">✓ ${formatYm(app.ym)}で使用中</b>` : ""}</td>
     </tr>`).join("");
 
   const coordStatus = draftRoiRows
@@ -385,7 +380,7 @@ export async function show() {
         </div>
       </div>
       <div class="row-actions">
-        <label>適用開始月 <input id="mstEffective" value="${draftEffective || nextYm(app.ym)}" size="7" maxlength="6" /></label>
+        <label>適用開始月 <input id="mstEffective" value="${formatYm(draftEffective || nextYm(app.ym))}" placeholder="2026年08月" size="9" /></label>
         <button id="mstSave" class="btn">新しいマスタとして保存</button>
         <button id="mstCancel" class="btn-sub">キャンセル</button>
       </div>
@@ -403,7 +398,7 @@ export async function show() {
   el().innerHTML = `
     <h2 class="view-title">商品マスタ・交換票</h2>
     <div class="panel">
-      <h3>${app.ym} の商品マスタ（v${month.masterVersion}）</h3>
+      <h3>${formatYm(app.ym)} の商品マスタ（v${month.masterVersion}）</h3>
       <table class="result-table">
         <thead><tr><th>商品ID</th><th>名称</th><th>点数</th></tr></thead>
         <tbody>${master.products.map((p) => `<tr><td class="muted">${p.key}</td><td>${p.name}</td><td>${p.points}点</td></tr>`).join("")}</tbody>

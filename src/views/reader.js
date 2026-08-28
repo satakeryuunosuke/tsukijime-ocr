@@ -4,6 +4,7 @@ import { openPdf, renderPdfPage } from "../pdf.js";
 import { recognizePage } from "../pipeline.js";
 import { buildCsv, buildAggregatedCsv, downloadCsv } from "../csv.js";
 import { validatePage, daysInMonth, qtyOf, toInt } from "../validate.js";
+import { formatYm } from "../dateUtils.js";
 import { openReview } from "../review.js";
 import { ensureMonth, putMonth, getMaster, getSetting } from "../db.js";
 import { toast } from "../toast.js";
@@ -215,7 +216,7 @@ async function renderSavedInfo() {
   const month = await ensureMonth(ym);
   const okNow = pages.filter(isFullyOk).length;
   $("savedInfo").textContent =
-    `✓OK のページは自動で ${ym} の月データに保存されます（保存済み: ${month.pages.length} 枚）。` +
+    `✓OK のページは自動で ${formatYm(ym)} の月データに保存されます（保存済み: ${month.pages.length} 枚）。` +
     (okNow ? "" : " まだ確定したページがありません。");
 }
 
@@ -373,7 +374,7 @@ export function init(appRef) {
 // タブ表示時（対象年月の変更時にも呼ばれる）
 export async function show() {
   if (app.engine) {
-    setStatus(`準備完了。${app.ym} の交換票（PDF/画像）を選択してください。`);
+    setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
     $("fileInput").disabled = false;
   }
   await renderSavedInfo();
@@ -381,7 +382,7 @@ export async function show() {
 
 // エンジン初期化完了時に main.js から呼ばれる
 export function onEngineReady() {
-  setStatus(`準備完了。${app.ym} の交換票（PDF/画像）を選択してください。`);
+  setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
   $("fileInput").disabled = false;
 }
 

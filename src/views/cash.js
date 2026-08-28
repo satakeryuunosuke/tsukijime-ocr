@@ -11,18 +11,12 @@ import {
 import { downloadCsv } from "../csv.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
+import { formatYm, prevYm } from "../dateUtils.js";
 
 let app = null;
 const el = () => document.getElementById("view-cash");
 
 const yen = (n) => n.toLocaleString("ja-JP") + "円";
-
-function prevYm(ym) {
-  let y = parseInt(ym.slice(0, 4), 10);
-  let m = parseInt(ym.slice(4, 6), 10) - 1;
-  if (m < 1) { m = 12; y--; }
-  return `${y}${String(m).padStart(2, "0")}`;
-}
 
 // 汎用の小さなポップアップ（訂正モーダルのスタイルを流用）
 function openModal(title, bodyHtml, width = 560) {
@@ -79,7 +73,7 @@ async function fillOpeningFromPrev() {
   const pym = prevYm(app.ym);
   const prev = await getMonth(pym);
   const closing = prev && prev.cash && prev.cash.closing;
-  if (!closing) { alert(`前月（${pym}）の月末金種が入力されていません。`); return; }
+  if (!closing) { alert(`前月（${formatYm(pym)}）の月末金種が入力されていません。`); return; }
   el().querySelectorAll("input[data-open]").forEach((inp) => {
     inp.value = toInt(closing[inp.getAttribute("data-open")]);
   });
@@ -307,14 +301,14 @@ export async function show() {
   const pym = prevYm(app.ym);
 
   el().innerHTML = `
-    <h2 class="view-title">現金管理（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
+    <h2 class="view-title">現金管理（${formatYm(app.ym)}）</h2>
     <p class="view-sub">ノートの現金販売で受け取った現金を管理します。月末に金庫の現金を数えて入力すると、売上記録とのつじつまを自動チェックします。</p>
 
     <div class="panel">
       <h3>現金の枚数（金種別）</h3>
       <p class="view-sub">月初（前月から引き継いだ時点）と月末（締めのとき）に数えた枚数を入力してください。</p>
       <div class="row-actions">
-        <button id="cashFillPrev" class="btn-sub">前月（${pym}）の月末金種を月初に引き継ぐ</button>
+        <button id="cashFillPrev" class="btn-sub">前月（${formatYm(pym)}）の月末金種を月初に引き継ぐ</button>
         <button id="cashPrices" class="btn-sub">ノート単価の設定…</button>
       </div>
       <table class="entry-table cash-denoms">

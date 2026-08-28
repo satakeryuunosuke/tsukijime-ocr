@@ -1,8 +1,8 @@
-// ホームタブ。対象年月の作業進捗と各工程へのショートカットを表示する。
 import { ensureMonth, getMaster } from "../db.js";
 import { downloadReport } from "../excelReport.js";
 import { openReportPreview } from "../reportPreview.js";
 import { APP_VERSION } from "../version.js";
+import { formatYm } from "../dateUtils.js";
 
 let app = null;
 const el = () => document.getElementById("view-home");
@@ -65,7 +65,7 @@ export async function show() {
     : (pagesN ? `保存済み ${pagesN} 枚` : "未読み取り");
 
   el().innerHTML = `
-    <h2 class="view-title">${y}年${m}月 の月締め</h2>
+    <h2 class="view-title">${formatYm(ym)} の月締め</h2>
     <a class="home-next ${na.cls}" href="#${na.view}">
       <div class="hn-label">次にやること</div>
       <div class="hn-title">${na.title}</div>

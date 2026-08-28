@@ -3,6 +3,7 @@
 import { exportAll, importAll, getAllMonths, getMonth, getMaster } from "../db.js";
 import { downloadCsv } from "../csv.js";
 import { buildMonthlyCsvs } from "../ledger.js";
+import { formatYm } from "../dateUtils.js";
 
 let app = null;
 const el = () => document.getElementById("view-backup");
@@ -55,7 +56,7 @@ export async function show() {
     .filter((m) => m.pages.length || m.carryover || Object.keys(m.arrivals || {}).length || (m.specials || []).length)
     .map((m) => `
       <tr>
-        <td>${m.ym}</td>
+        <td>${formatYm(m.ym)}</td>
         <td>${m.pages.length} 枚</td>
         <td>${m.carryover ? "✓" : "－"}</td>
         <td>${Object.keys(m.arrivals || {}).length} 日</td>

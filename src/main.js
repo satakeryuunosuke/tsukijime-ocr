@@ -4,6 +4,7 @@ import { loadConfig, parseRoiCsv } from "./config.js";
 import { initBackend } from "./backend.js";
 import { loadProducts } from "./products.js";
 import { getAllMasters, putMaster } from "./db.js";
+import { formatYm, parseYm, ymShift, defaultYmByRule } from "./dateUtils.js";
 import * as home from "./views/home.js";
 import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
@@ -23,21 +24,14 @@ export const app = {
   engine: null,    // { model, backend } 認識エンジン（起動時に一度だけ初期化）
   currentView: "home",
   navigate(view) { location.hash = "#" + view; },
-  async setYm(ym) {
-    if (!/^\d{6}$/.test(ym)) return;
+  async setYm(rawYm) {
+    const ym = parseYm(rawYm);
+    if (!ym) return;
     app.ym = ym;
-    $("ymInput").value = ym;
+    $("ymInput").value = formatYm(app.ym);
     await showView(app.currentView); // 表示中の画面を新しい年月で再描画
   },
 };
-
-function ymShift(ym, delta) {
-  let y = parseInt(ym.slice(0, 4), 10);
-  let m = parseInt(ym.slice(4, 6), 10) + delta;
-  if (m < 1) { m = 12; y--; }
-  if (m > 12) { m = 1; y++; }
-  return `${y}${String(m).padStart(2, "0")}`;
-}
 
 async function showView(rawName) {
   let name = rawName;
@@ -92,28 +86,23 @@ async function waitCv() {
   }
 }
 
-// 既定の対象年月: 毎月15日〜翌月14日を「その月」とする。
-// （前月の棚卸を月初に行う運用のため、例: 7月3日に開くと6月が対象になる）
-function defaultYmByRule(now = new Date()) {
-  let y = now.getFullYear();
-  let m = now.getMonth() + 1; // 1-12
-  if (now.getDate() < 15) {
-    m--;
-    if (m < 1) { m = 12; y--; }
-  }
-  return `${y}${String(m).padStart(2, "0")}`;
-}
-
 async function init() {
   // 対象年月は起動のたびにルールから算出（手動変更はそのセッション内でのみ有効）
   app.ym = defaultYmByRule();
-  $("ymInput").value = app.ym;
+  $("ymInput").value = formatYm(app.ym);
 
   // 年月バー
   $("ymInput").addEventListener("change", () => {
     const v = $("ymInput").value.trim();
-    if (/^\d{6}$/.test(v)) app.setYm(v);
-    else $("ymInput").value = app.ym;
+    const parsed = parseYm(v);
+    if (parsed) {
+      app.setYm(parsed);
+    } else {
+      $("ymInput").value = formatYm(app.ym);
+    }
+  });
+  $("ymInput").addEventListener("focus", () => {
+    $("ymInput").select();
   });
   $("ymPrev").addEventListener("click", () => app.setYm(ymShift(app.ym, -1)));
   $("ymNext").addEventListener("click", () => app.setYm(ymShift(app.ym, +1)));

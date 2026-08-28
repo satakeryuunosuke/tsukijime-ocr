@@ -4,6 +4,7 @@ import { ensureMonth, putMonth, getMaster } from "../db.js";
 import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
+import { formatYm } from "../dateUtils.js";
 
 let app = null;
 let selectedDay = 1;
@@ -117,7 +118,7 @@ export async function show() {
   const dayTotal = Object.values(dayData).reduce((sum, v) => sum + toInt(v), 0);
 
   el().innerHTML = `
-    <h2 class="view-title">入庫の記録（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
+    <h2 class="view-title">入庫の記録（${formatYm(app.ym)}）</h2>
     <p class="view-sub">グッズが届いた日を選び、届いた個数を入力して保存してください。</p>
 
     <div class="ar-container">

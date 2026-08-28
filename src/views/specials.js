@@ -5,6 +5,7 @@ import { noteProducts, SPECIAL_METHODS } from "../ledger.js";
 import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
+import { formatYm } from "../dateUtils.js";
 
 let app = null;
 let lastDay = null;    // 追加後も日付・種別の選択を保持する
@@ -68,7 +69,7 @@ export async function show() {
   const selMethod = lastMethod || SPECIAL_METHODS[0].id;
 
   el().innerHTML = `
-    <h2 class="view-title">ノート購入（${app.ym.slice(0, 4)}年${parseInt(app.ym.slice(4), 10)}月）</h2>
+    <h2 class="view-title">ノート購入（${formatYm(app.ym)}）</h2>
     <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
     <div class="panel">
       <h3>記録を追加</h3>

@@ -19,13 +19,8 @@ export function computeTotalScore(predictions, products) {
   return total;
 }
 
-// ym: 'YYYYMM' 文字列。その月の日数を返す（不正なら31）。
-export function daysInMonth(ym) {
-  const y = parseInt(String(ym).slice(0, 4), 10);
-  const m = parseInt(String(ym).slice(4, 6), 10);
-  if (!y || !m || m < 1 || m > 12) return 31;
-  return new Date(y, m, 0).getDate();
-}
+import { daysInMonth } from "./dateUtils.js";
+export { daysInMonth };
 
 export function validatePage(predictions, products, maxDays, checksumDigits = 2) {
   const computed = computeTotalScore(predictions, products);

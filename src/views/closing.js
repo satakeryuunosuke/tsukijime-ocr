@@ -8,6 +8,7 @@ import { openReportPreview } from "../reportPreview.js";
 import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from "../reorder.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
+import { formatYm } from "../dateUtils.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -156,7 +157,6 @@ function adjustPanel(month, products) {
 // 「月平均払出 × STOCK_MONTHS か月分」を下回る商品と、その発注数を知らせる。
 function reorderPanel(month, products, ledger, avgInfo) {
   const { avg, monthsUsed } = avgInfo;
-  const fmtYm = (ym) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4), 10)}月`;
   if (!monthsUsed.length) {
     return `
       <div class="panel">
@@ -174,7 +174,7 @@ function reorderPanel(month, products, ledger, avgInfo) {
   const fmtAvg = (a) => (a % 1 ? a.toFixed(1) : String(a));
   const basisNote =
     `基準: 在庫が「月平均払出 × ${STOCK_MONTHS}か月分」を下回ったら、その分だけ発注。` +
-    `月平均は ${[...monthsUsed].reverse().map(fmtYm).join("・")} の実績から計算。` +
+    `月平均は ${[...monthsUsed].reverse().map(formatYm).join("・")} の実績から計算。` +
     `現在庫は${usePhys ? "保存済みの実棚数" : "帳簿残（実棚数を保存すると実棚数）"}を使用。`;
   const body = toOrder.length ? `
       <div class="table-scroll">
@@ -246,7 +246,7 @@ export async function show() {
   if (!month.pages.length) warns.push(`読み取り済みの交換票がありません（<a href="#reader">読み取り</a>で保存）。`);
 
   el().innerHTML = `
-    <h2 class="view-title">月締め・棚卸（${y}年${m}月）</h2>
+    <h2 class="view-title">月締め・棚卸（${formatYm(app.ym)}）</h2>
     ${warns.length ? `<div class="panel warn-panel">${warns.map((w) => `<div>⚠ ${w}</div>`).join("")}</div>` : ""}
     <div class="panel">
       <h3>棚卸表</h3>
