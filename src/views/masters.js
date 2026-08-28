@@ -194,7 +194,7 @@ async function saveDraft() {
   // 未設定でも商品構成が前のマスタと同じ（名称・点数変更のみ）なら座標と票を引き継ぐ。
   let roiRows, roiSource, formXlsxB64, formXlsxName;
   if (draftRoiRows) {
-    const expected = new Set([...draft.flatMap((p) => [`${p.key}_0`, `${p.key}_1`]), "date_0", "date_1", "total_1", "total_2"]);
+    const expected = new Set([...draft.flatMap((p) => [`${p.key}_0`, `${p.key}_1`]), "date_0", "date_1", "total_0", "total_1", "total_2"]);
     const actual = new Set(draftRoiRows.map((r) => r.name));
     const same = expected.size === actual.size && [...expected].every((n) => actual.has(n));
     if (!same) {

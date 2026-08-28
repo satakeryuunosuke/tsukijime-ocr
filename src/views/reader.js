@@ -5,7 +5,7 @@ import { recognizePage } from "../pipeline.js";
 import { buildCsv, buildAggregatedCsv, downloadCsv } from "../csv.js";
 import { validatePage, daysInMonth, qtyOf, toInt } from "../validate.js";
 import { openReview } from "../review.js";
-import { ensureMonth, putMonth, getMaster } from "../db.js";
+import { ensureMonth, putMonth, getMaster, getSetting } from "../db.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
@@ -17,17 +17,30 @@ let sessionYm = null; // 処理時の対象年月（処理後に年月を変え�
 
 function setStatus(msg) { $("status").textContent = msg; }
 
+function ensureTotal0(roiRows) {
+  if (!roiRows || roiRows.some((r) => r.name === "total_0")) return roiRows;
+  const t1 = roiRows.find((r) => r.name === "total_1");
+  const t2 = roiRows.find((r) => r.name === "total_2");
+  if (t1 && t2) {
+    const dx = t1.x - t2.x;
+    return [...roiRows, { name: "total_0", x: t1.x + dx, y: t1.y, h: t1.h, w: t1.w }];
+  }
+  return roiRows;
+}
+
 // 対象年月のマスタスナップショットから認識用コンテキストを組み立てる
 async function buildCtx(ym) {
   const month = await ensureMonth(ym);
   const master = await getMaster(month.masterVersion);
   if (!master) throw new Error(`マスタ v${month.masterVersion} が見つかりません`);
+  const checksumDigits = (await getSetting("checksumDigits")) || 2;
   return {
-    roiRows: master.roiRows,
+    roiRows: ensureTotal0(master.roiRows),
     products: master.products,
     cfg: master.config,
     model: app.engine.model,
     maxDays: daysInMonth(ym),
+    checksumDigits: Number(checksumDigits),
   };
 }
 
@@ -101,8 +114,13 @@ function digitsSummary(predictions) {
     const q = qtyOf(predictions, p.key);
     if (q) parts.push(`${p.name}×${q}`);
   }
-  const totalPts = (toInt(predictions.total_2) * 10 + toInt(predictions.total_1)) * 10;
-  if (totalPts) parts.push(`合計${totalPts}点`);
+  const hasTotal = predictions.total_0 !== "" && predictions.total_0 != null ||
+                   predictions.total_1 !== "" && predictions.total_1 != null ||
+                   predictions.total_2 !== "" && predictions.total_2 != null;
+  if (hasTotal) {
+    const totalPts = toInt(predictions.total_2) * 100 + toInt(predictions.total_1) * 10 + toInt(predictions.total_0);
+    parts.push(`合計${totalPts}点`);
+  }
   return parts;
 }
 const dateOf = (p) => (p && (`${p.date_1 ?? ""}${p.date_0 ?? ""}`)) || "-";
@@ -197,7 +215,7 @@ async function processAll(ctx) {
     page.autoTuned = !!res.autoTuned;
     page.predictions = res.predictions || {};
     page.lowConfidence = res.lowConfidence || [];
-    page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays) : null;
+    page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays, ctx.checksumDigits) : null;
 
     $("progressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";
     setStatus(`認識中… ${i + 1} / ${total} ページ`);

@@ -97,7 +97,7 @@ export function computeLedger(month, products) {
 //   余剰（実棚 > 帳簿残）: 指定日の入庫記録に加算する。
 // 制約: 1ページの商品個数は各99まで・合計点数は990点まで（記入欄が2桁のため）。超える分は複数ページに分割。
 
-const PAGE_MAX_TOTAL = 990; // 合計欄は10点単位2桁 → 990点まで
+const PAGE_MAX_TOTAL = 999; // 合計欄は3桁 → 999点まで
 const PAGE_MAX_QTY = 99;    // 個数欄は2桁
 
 // 差異の計算。返り値: { shortages: {key: 個数}, surpluses: {key: 個数} }
@@ -134,9 +134,9 @@ export function buildAdjustmentPages(shortages, products, day, existingNames = n
   };
   const closePage = () => {
     if (!current) return;
-    const tens = Math.floor(total / 10);
-    current.total_1 = String(tens % 10);
-    current.total_2 = String(Math.floor(tens / 10) % 10);
+    current.total_0 = String(total % 10);
+    current.total_1 = String(Math.floor(total / 10) % 10);
+    current.total_2 = String(Math.floor(total / 100) % 10);
   };
 
   for (const item of queue) {

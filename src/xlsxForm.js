@@ -4,7 +4,7 @@
 // 枠の並びの規則で自動割り当ても行う:
 //   ・左が狭い横2連の枠 → 商品（左=10の位, 右=1の位）。列ごとに上から、左の列から順に商品リストと対応
 //   ・等幅の横2連の枠   → 日付（左=10の位, 右=1の位）
-//   ・横3連の枠         → 合計（左=百の位=total_2, 中=十の位=total_1。右端=一の位は読まない）
+//   ・横3連の枠         → 合計（左=百の位=total_2, 中=十の位=total_1, 右=一の位=total_0）
 //   ・単独の枠           → 無視（月の枠・ラベル枠など）
 // 座標は現行 ROI_coordinate.csv（手調整済み）と±2ユニットで一致することを実データで検証済み。
 import { ensureExcelJs } from "./excelReport.js";
@@ -276,6 +276,9 @@ export function autoAssign(boxes, products) {
   if (totalChain) {
     assigned.set("total_2", { x: totalChain[0].x, y: totalChain[0].y, w: totalChain[0].w, h: totalChain[0].h });
     assigned.set("total_1", { x: totalChain[1].x, y: totalChain[1].y, w: totalChain[1].w, h: totalChain[1].h });
+    if (totalChain[2]) {
+      assigned.set("total_0", { x: totalChain[2].x, y: totalChain[2].y, w: totalChain[2].w, h: totalChain[2].h });
+    }
   } else {
     messages.push("合計の枠（横3連）が見つかりませんでした。手動で割り当ててください。");
   }

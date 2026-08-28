@@ -92,8 +92,7 @@ export async function show() {
         physDone, "日別台帳と月末の帳簿残を確認し、実際の在庫数と突き合わせてExcelレポートを出力します。")}
     </div>
     <div class="home-links">
-      <a href="#masters">商品の入れ替え・交換票の印刷 →</a>
-      <a href="#backup">バックアップ・引き継ぎ（データ管理） →</a>
+      <a href="#settings">システム設定（検算桁数・商品マスタ・データ管理） →</a>
     </div>
     <div class="home-footer">
       <span class="home-version">システムバージョン: ${APP_VERSION}</span>

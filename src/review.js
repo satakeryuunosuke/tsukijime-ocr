@@ -253,7 +253,7 @@ function editMode(body, page, rawCanvas, ctx, close) {
         <div class="rv-products"></div>
         <div class="rv-field rv-total">
           <label>合計点数</label>
-          <input type="number" min="0" max="990" step="10" class="rv-in-total" inputmode="numeric" />
+          <input type="number" min="0" max="999" step="1" class="rv-in-total" inputmode="numeric" />
           <button class="btn-sub rv-fill">個数から自動</button>
         </div>
         <div class="rv-check"></div>
@@ -328,17 +328,23 @@ function editMode(body, page, rawCanvas, ctx, close) {
     prodWrap.appendChild(row);
   }
 
-  // 合計点数。交換票の合計欄は「点数÷10」を2桁（total_2=十の位, total_1=一の位）で
-  // 記入する形式なので、入力は点数で受けて ÷10 した値を桁に反映する。
+  // 合計点数（3桁: total_2=百の位, total_1=十の位, total_0=一の位）
   const totalIn = body.querySelector(".rv-in-total");
-  const totalPoints = () => (toInt(P.total_2) * 10 + toInt(P.total_1)) * 10;
-  totalIn.value = totalPoints() || "";
+  const totalPoints = () => {
+    const hasAny = P.total_0 !== "" && P.total_0 != null ||
+                   P.total_1 !== "" && P.total_1 != null ||
+                   P.total_2 !== "" && P.total_2 != null;
+    if (!hasAny) return "";
+    return toInt(P.total_2) * 100 + toInt(P.total_1) * 10 + toInt(P.total_0);
+  };
+  totalIn.value = totalPoints();
   totalIn.addEventListener("input", () => {
-    const box = Math.max(0, Math.min(99, Math.floor((parseInt(totalIn.value, 10) || 0) / 10)));
-    P.total_1 = box % 10;
-    P.total_2 = Math.floor(box / 10);
+    const val = Math.max(0, Math.min(999, parseInt(totalIn.value, 10) || 0));
+    P.total_0 = val % 10;
+    P.total_1 = Math.floor(val / 10) % 10;
+    P.total_2 = Math.floor(val / 100) % 10;
     recompute();
-    redraw("total_1");
+    redraw("total_0");
   });
   dateIn.addEventListener("input", () => {
     setTwoDigit(P, "date", parseInt(dateIn.value, 10) || 0);
@@ -348,9 +354,9 @@ function editMode(body, page, rawCanvas, ctx, close) {
 
   body.querySelector(".rv-fill").onclick = () => {
     fillTotalFromQty(P, ctx.products);
-    totalIn.value = totalPoints() || "";
+    totalIn.value = totalPoints();
     recompute();
-    redraw("total_1");
+    redraw("total_0");
   };
 
   const checkEl = body.querySelector(".rv-check");
@@ -358,11 +364,12 @@ function editMode(body, page, rawCanvas, ctx, close) {
   const maxDays = ctx.maxDays;
   let curValid = null; // 編集中はローカルに保持し、保存時のみ page.valid へ反映
   function recompute() {
-    const v = validatePage(P, ctx.products, maxDays);
+    const v = validatePage(P, ctx.products, maxDays, ctx.checksumDigits);
     curValid = v;
+    const modeNote = v.checksumDigits === 2 ? ` <small class="muted">（上2桁[${v.boxTens}]で照合）</small>` : "";
     checkEl.innerHTML =
       `<div>個数からの計算合計 <b>${v.computed}</b> 点</div>` +
-      `<div>記入された合計 <b>${v.totalBox * 10}</b> 点 → 検算 ` +
+      `<div>記入された合計 <b>${v.totalBox}</b> 点${modeNote} → 検算 ` +
       (v.checksumOk ? `<span class="ok">✓ 一致</span>` : `<span class="err">✗ 不一致</span>`) + `</div>`;
     dateFlag.innerHTML = v.dateOk ? `<span class="ok">✓</span>` : `<span class="err">✗ 範囲外</span>`;
   }

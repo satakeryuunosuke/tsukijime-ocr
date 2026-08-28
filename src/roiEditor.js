@@ -21,6 +21,7 @@ function buildFields(products) {
   fields.push({ name: "date_0", label: "日付｜1の位（右の枠）" });
   fields.push({ name: "total_2", label: "合計｜百の位（左の枠）" });
   fields.push({ name: "total_1", label: "合計｜十の位（中の枠）" });
+  fields.push({ name: "total_0", label: "合計｜一の位（右の枠）" });
   return fields;
 }
 
@@ -187,7 +188,7 @@ export function openAssignSession(opts) {
           rows.push({ name: `${p.key}_0`, ...assigned.get(`${p.key}_0`) });
           rows.push({ name: `${p.key}_1`, ...assigned.get(`${p.key}_1`) });
         }
-        for (const n of ["date_0", "date_1", "total_1", "total_2"]) {
+        for (const n of ["date_0", "date_1", "total_0", "total_1", "total_2"]) {
           rows.push({ name: n, ...assigned.get(n) });
         }
         close(rows);

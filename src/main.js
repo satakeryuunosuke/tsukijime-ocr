@@ -11,13 +11,12 @@ import * as arrivals from "./views/arrivals.js";
 import * as specials from "./views/specials.js";
 import * as cash from "./views/cash.js";
 import * as closing from "./views/closing.js";
-import * as masters from "./views/masters.js";
-import * as backup from "./views/backup.js";
+import * as settings from "./views/settings.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
 
-const VIEWS = { home, reader, carryover, arrivals, specials, cash, closing, masters, backup };
+const VIEWS = { home, reader, carryover, arrivals, specials, cash, closing, settings };
 
 export const app = {
   ym: null,        // 対象年月 'YYYYMM'（全タブ共通）
@@ -40,7 +39,13 @@ function ymShift(ym, delta) {
   return `${y}${String(m).padStart(2, "0")}`;
 }
 
-async function showView(name) {
+async function showView(rawName) {
+  let name = rawName;
+  let subTab = null;
+  if (name === "masters" || name === "backup") {
+    subTab = name;
+    name = "settings";
+  }
   if (!VIEWS[name]) name = "home";
   app.currentView = name;
   for (const key of Object.keys(VIEWS)) {
@@ -49,7 +54,11 @@ async function showView(name) {
   document.querySelectorAll("#nav a").forEach((a) =>
     a.classList.toggle("active", a.dataset.view === name));
   try {
-    await VIEWS[name].show();
+    if (name === "settings" && subTab) {
+      await VIEWS[name].show(subTab);
+    } else {
+      await VIEWS[name].show();
+    }
   } catch (e) {
     console.error(`画面 ${name} の表示エラー:`, e);
     $(`view-${name}`).innerHTML = `<p class="err">画面の表示に失敗しました: ${e.message}</p>`;

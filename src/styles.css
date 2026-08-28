@@ -652,3 +652,85 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
   gap: .3rem;
   flex-shrink: 0;
 }
+
+/* ---- 設定タブ ---- */
+.settings-subnav {
+  display: flex;
+  gap: .5rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.25rem;
+  padding-bottom: .25rem;
+  flex-wrap: wrap;
+}
+.subnav-btn {
+  background: transparent;
+  border: none;
+  padding: .6rem 1rem;
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.subnav-btn:hover {
+  color: var(--text);
+  background: #f1f5f9;
+}
+.subnav-btn.active {
+  color: var(--primary-d);
+  background: #e0f2fe;
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin: 1rem 0;
+}
+.setting-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all .15s;
+}
+.setting-radio:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+.setting-radio.active {
+  border-color: var(--primary);
+  background: #f0f9ff;
+  box-shadow: 0 1px 4px rgba(14,165,233,.12);
+}
+.setting-radio input[type="radio"] {
+  margin-top: .2rem;
+  cursor: pointer;
+}
+.setting-radio-body {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.setting-radio-body b {
+  font-size: .95rem;
+  color: var(--text);
+}
+.setting-desc {
+  font-size: .83rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.setting-saved {
+  color: var(--ok);
+  font-weight: 600;
+  font-size: .9rem;
+  margin-top: .5rem;
+  animation: fadeIn .2s;
+}
