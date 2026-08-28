@@ -6,6 +6,7 @@ import { loadProducts } from "./products.js";
 import { getAllMasters, putMaster } from "./db.js";
 import { formatYm, parseYm, ymShift, defaultYmByRule } from "./dateUtils.js";
 import { initGlobalHelpListener, initHelpShortcuts } from "./help.js";
+import { initErrorLogger, copyAiReportToClipboard, openAiReportModal } from "./aiReport.js";
 import * as home from "./views/home.js";
 import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
@@ -88,6 +89,9 @@ async function waitCv() {
 }
 
 async function init() {
+  // エラーロガーの初期化（AI相談用ログ収集）
+  initErrorLogger();
+
   // 対象年月は起動のたびにルールから算出（手動変更はそのセッション内でのみ有効）
   app.ym = defaultYmByRule();
   $("ymInput").value = formatYm(app.ym);
@@ -107,6 +111,24 @@ async function init() {
   });
   $("ymPrev").addEventListener("click", () => app.setYm(ymShift(app.ym, -1)));
   $("ymNext").addEventListener("click", () => app.setYm(ymShift(app.ym, +1)));
+
+  // AI相談レポート（ボタンクリック & ショートカット）
+  const aiReportBtn = $("aiReportBtn");
+  if (aiReportBtn) {
+    aiReportBtn.addEventListener("click", () => openAiReportModal(app));
+  }
+
+  // グローバルショートカット (Ctrl+Shift+A / Cmd+Shift+A / Alt+A)
+  window.addEventListener("keydown", (e) => {
+    // 入力欄にフォーカス中でも Ctrl+Shift+A や Alt+A は発火
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "A" || e.key === "a")) {
+      e.preventDefault();
+      copyAiReportToClipboard(app, "", true);
+    } else if (e.altKey && (e.key === "A" || e.key === "a")) {
+      e.preventDefault();
+      openAiReportModal(app);
+    }
+  });
 
   // ルーティング
   window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "home"));

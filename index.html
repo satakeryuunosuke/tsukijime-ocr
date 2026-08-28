@@ -16,10 +16,18 @@
         <h1>グッズ交換・月締めシステム <button type="button" class="help-btn help-btn-light" data-help="header_overview" title="システムの全体概要・使い方">?</button></h1>
         <p class="sub">交換票の読み取りから棚卸・レポート出力までブラウザで完結（オフライン・端末内処理）</p>
       </div>
-      <div class="ym-bar">
-        <button id="ymPrev" class="ym-btn" title="前の月">◀</button>
-        <label class="ym-label">対象年月 <input id="ymInput" type="text" placeholder="2026年07月" size="9" /><button type="button" class="help-btn help-btn-light help-btn-sm" data-help="header_ym" title="対象年月の選び方・自動判定ルール">?</button></label>
-        <button id="ymNext" class="ym-btn" title="次の月">▶</button>
+      <div class="head-actions">
+        <div class="ym-bar">
+          <button id="ymPrev" class="ym-btn" title="前の月">◀</button>
+          <label class="ym-label">対象年月 <input id="ymInput" type="text" placeholder="2026年07月" size="9" /><button type="button" class="help-btn help-btn-light help-btn-sm" data-help="header_ym" title="対象年月の選び方・自動判定ルール">?</button></label>
+          <button id="ymNext" class="ym-btn" title="次の月">▶</button>
+        </div>
+        <div class="ai-btn-wrap" style="display:inline-flex; align-items:center; gap:.25rem;">
+          <button id="aiReportBtn" class="ai-header-btn" title="AI相談用レポートをクリップボードにコピー (Ctrl+Shift+A)">
+            🤖 <span>AI相談</span>
+          </button>
+          <button type="button" class="help-btn help-btn-light help-btn-sm" data-help="header_ai" title="AI相談機能の使い方・出力内容について">?</button>
+        </div>
       </div>
     </div>
     <nav id="nav" class="nav">
