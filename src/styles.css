@@ -194,6 +194,12 @@ main { max-width: 960px; margin: 1.25rem auto; padding: 0 1rem; }
 .hc-desc { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
 .home-links { margin-top: 1rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .home-links a { color: var(--primary-d); font-size: .9rem; font-weight: 600; text-decoration: none; }
+.home-footer {
+  margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; align-items: center;
+  color: var(--muted); font-size: .8rem;
+}
+.home-version { font-variant-numeric: tabular-nums; }
 
 /* 入力系テーブル（繰越・入庫・マスタ編集） */
 .entry-table {

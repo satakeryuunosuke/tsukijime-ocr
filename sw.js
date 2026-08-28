@@ -8,6 +8,7 @@ const PRECACHE = [
   "./index.html",
   "./manifest.json",
   // アプリコード
+  "./src/version.js",
   "./src/main.js",
   "./src/config.js",
   "./src/backend.js",

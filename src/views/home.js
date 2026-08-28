@@ -2,6 +2,7 @@
 import { ensureMonth, getMaster } from "../db.js";
 import { downloadReport } from "../excelReport.js";
 import { openReportPreview } from "../reportPreview.js";
+import { APP_VERSION } from "../version.js";
 
 let app = null;
 const el = () => document.getElementById("view-home");
@@ -93,6 +94,9 @@ export async function show() {
     <div class="home-links">
       <a href="#masters">商品の入れ替え・交換票の印刷 →</a>
       <a href="#backup">バックアップ・引き継ぎ（データ管理） →</a>
+    </div>
+    <div class="home-footer">
+      <span class="home-version">システムバージョン: ${APP_VERSION}</span>
     </div>`;
 
   const repBtn = el().querySelector("#homeReport");
