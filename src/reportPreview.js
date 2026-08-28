@@ -6,6 +6,7 @@ import { computeLedger, noteProducts } from "./ledger.js";
 import { toInt } from "./validate.js";
 import { getSetting } from "./db.js";
 import { DENOMS, DENOM_NAMES, cashTotal, dailyCashSales, withdrawalsTotal, buildDailyDenomTable } from "./cash.js";
+import { helpBtn } from "./help.js";
 
 const GOODS_PER_SHEET = 8; // Excelレポートのグッズ台帳と同じ分割単位
 
@@ -158,7 +159,13 @@ export async function openReportPreview(month, products) {
   shell.className = "rv-overlay";
   shell.innerHTML = `
     <div class="rv-modal rp-modal">
-      <div class="rv-head"><span class="rv-title"></span><button class="rv-close" title="閉じる">✕</button></div>
+      <div class="rv-head">
+        <div class="rv-title-wrap">
+          <span class="rv-title"></span>
+          ${helpBtn("modal_report_preview", { size: "sm", title: "レポートプレビューの見方・操作について" })}
+        </div>
+        <button class="rv-close" title="閉じる">✕</button>
+      </div>
       <div class="rv-body rp-body"></div>
     </div>`;
   shell.querySelector(".rv-title").textContent =

@@ -6,6 +6,7 @@ import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 let lastDay = null;    // 追加後も日付・種別の選択を保持する
@@ -83,11 +84,17 @@ export async function show() {
     </div>` : "";
 
   el().innerHTML = `
-    <h2 class="view-title">ノート購入（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      ノート購入（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("specials_overview", { size: "lg", title: "ノート購入記録の概要と役割" })}
+    </h2>
     ${lockBannerHtml}
     <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
     <div class="panel">
-      <h3>記録を追加</h3>
+      <h3>
+        記録を追加
+        ${helpBtn("specials_methods", { size: "sm", title: "購入種別（現金/口座振替/栄冠ポイント）の違いについて" })}
+      </h3>
       <div class="sp-form">
         <label>日付
           <select id="spDay" ${isLocked ? "disabled" : ""}>

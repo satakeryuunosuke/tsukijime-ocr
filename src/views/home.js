@@ -3,14 +3,28 @@ import { downloadReport } from "../excelReport.js";
 import { openReportPreview } from "../reportPreview.js";
 import { APP_VERSION } from "../version.js";
 import { formatYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 const el = () => document.getElementById("view-home");
 
+const VIEW_HELP_MAP = {
+  carryover: "carryover_overview",
+  reader: "reader_overview",
+  arrivals: "arrivals_overview",
+  specials: "specials_overview",
+  cash: "cash_overview",
+  closing: "closing_overview",
+};
+
 function card(view, title, status, ok, desc) {
+  const helpKey = VIEW_HELP_MAP[view] || "home_overview";
   return `
     <a class="home-card ${ok ? "done" : ""}" href="#${view}">
-      <div class="hc-head"><span class="hc-title">${title}</span><span class="hc-status">${status}</span></div>
+      <div class="hc-head">
+        <span class="hc-title">${title} ${helpBtn(helpKey, { size: "sm", title: `${title}の取説・ヒントを見る` })}</span>
+        <span class="hc-status">${status}</span>
+      </div>
       <p class="hc-desc">${desc}</p>
     </a>`;
 }
@@ -78,9 +92,15 @@ export async function show() {
     : (physDone ? "実棚入力済み ✓" : "未実施");
 
   el().innerHTML = `
-    <h2 class="view-title">${formatYm(ym)} の月締め${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      ${formatYm(ym)} の月締め${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("home_overview", { size: "lg", title: "月締め全体の流れとホーム画面の使い方" })}
+    </h2>
     <a class="home-next ${na.cls}" href="#${na.view}">
-      <div class="hn-label">次にやること</div>
+      <div class="hn-label">
+        次にやること
+        ${helpBtn("home_next_action", { size: "sm", title: "「次にやること」バナーの仕組み・判定基準" })}
+      </div>
       <div class="hn-title">${na.title}</div>
       <p class="hn-desc">${na.desc}</p>
     </a>
@@ -88,6 +108,7 @@ export async function show() {
     <div class="row-actions">
       <button id="homeReport" class="btn btn-secondary">Excelレポート（report_${ym}.xlsx）</button>
       <button id="homePreview" class="btn-sub">レポートをブラウザで見る</button>
+      ${helpBtn("home_report_preview", { size: "sm", title: "Excelレポート出力とプレビューについて" })}
     </div>` : ""}
     <p class="view-sub">上から順に進めると月締めが完了します。使用マスタ: v${month.masterVersion}${master ? `（${master.label || ""}・商品${master.products.length}件）` : ""}</p>
     <div class="home-grid">

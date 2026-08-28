@@ -10,6 +10,7 @@ import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
 import { triggerBackupDownload } from "./backup.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -244,7 +245,10 @@ function reorderPanel(month, products, ledger, avgInfo) {
   if (!monthsUsed.length) {
     return `
       <div class="panel">
-        <h3>発注のめやす</h3>
+        <h3>
+          発注のめやす
+          ${helpBtn("closing_reorder", { size: "sm", title: "発注推奨数の計算基準について" })}
+        </h3>
         <p class="view-sub">払出の実績がまだないため計算できません（交換票の読み取りやノート購入を記録すると、翌月から表示されます）。</p>
       </div>`;
   }
@@ -258,34 +262,28 @@ function reorderPanel(month, products, ledger, avgInfo) {
   const fmtAvg = (a) => (a % 1 ? a.toFixed(1) : String(a));
   const basisNote =
     `基準: 在庫が「月平均払出 × ${STOCK_MONTHS}か月分」を下回ったら、その分だけ発注。` +
-    `月平均は ${[...monthsUsed].reverse().map(formatYm).join("・")} の実績から計算。` +
-    `現在庫は${usePhys ? "保存済みの実棚数" : "帳簿残（実棚数を保存すると実棚数）"}を使用。`;
-  const body = toOrder.length ? `
-      <div class="table-scroll">
+    `（参照した過去月: ${monthsUsed.map(formatYm).join("・")}、平均の月数: ${monthsUsed.length}か月分）`;
+  return `
+    <div class="panel">
+      <h3>
+        発注のめやす
+        ${helpBtn("closing_reorder", { size: "sm", title: "発注推奨数の計算基準について" })}
+      </h3>
+      <p class="view-sub">${basisNote}</p>
+      ${toOrder.length ? `
         <table class="result-table narrow">
-          <thead><tr><th>商品</th><th>現在庫</th><th>月平均払出</th><th>${STOCK_MONTHS}か月分のめやす</th><th>発注数</th></tr></thead>
+          <thead><tr><th>商品</th><th>現在庫</th><th>月平均払出</th><th>発注推奨数</th></tr></thead>
           <tbody>
             ${toOrder.map((r) => `
               <tr>
-                <td>${r.name}</td>
-                <td class="num">${r.stock}</td>
+                <td>${r.product.name}</td>
+                <td class="num">${r.current}</td>
                 <td class="num">${fmtAvg(r.avg)}</td>
-                <td class="num">${r.target}</td>
-                <td class="num"><b class="err">${r.order}</b></td>
+                <td class="num"><b class="warn">${r.order}</b></td>
               </tr>`).join("")}
           </tbody>
-        </table>
-      </div>`
-    : `<p class="view-sub ok">✓ すべての商品に${STOCK_MONTHS}か月分の在庫があります。発注が必要な商品はありません。</p>`;
-  const noHistoryNote = noHistory.length
-    ? `<p class="view-sub">実績がなく計算できない商品: ${noHistory.map((r) => r.name).join("・")}</p>`
-    : "";
-  return `
-    <div class="panel">
-      <h3>発注のめやす${toOrder.length ? `（${toOrder.length}商品）` : ""}</h3>
-      ${body}
-      ${noHistoryNote}
-      <p class="view-sub">${basisNote}</p>
+        </table>` : `<p class="view-sub ok">全商品、${STOCK_MONTHS}か月分以上の在庫があります。今月の発注推奨はありません。</p>`}
+      ${noHistory.length ? `<p class="view-sub muted">※ 過去の払出実績がないため計算対象外: ${noHistory.map((r) => r.product.name).join("、")}</p>` : ""}
     </div>`;
 }
 
@@ -355,7 +353,10 @@ export async function show() {
         <div class="closing-card-header">
           <span class="closing-card-icon">📊</span>
           <div>
-            <h3 class="closing-card-title">月次レポート（帳票出力）</h3>
+            <h3 class="closing-card-title">
+              月次レポート（帳票出力）
+              ${helpBtn("closing_report", { size: "sm", title: "Excel月締めレポートについて" })}
+            </h3>
             <p class="closing-card-desc">当月の棚卸表・日別交換明細・集計データをExcel形式でダウンロード、またはブラウザ上で確認できます。</p>
           </div>
         </div>
@@ -369,7 +370,10 @@ export async function show() {
         <div class="closing-card-header">
           <span class="closing-card-icon">${isLocked ? "🔒" : "🛡️"}</span>
           <div>
-            <h3 class="closing-card-title">月締めステータス・確定</h3>
+            <h3 class="closing-card-title">
+              月締めステータス・確定
+              ${helpBtn("closing_lock", { size: "sm", title: "月締め確定（ロック）と保護について" })}
+            </h3>
             <p class="closing-card-desc">
               ${isLocked
                 ? `この月（${formatYm(app.ym)}）は月締め確定（ロック中）です。誤操作防止のためデータが保護されています。`
@@ -392,15 +396,34 @@ export async function show() {
     </div>`;
 
   el().innerHTML = `
-    <h2 class="view-title">月締め・棚卸（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      月締め・棚卸（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("closing_overview", { size: "lg", title: "月締め・棚卸作業の全体フロー" })}
+    </h2>
     ${lockBannerHtml}
     ${warns.length ? `<div class="panel warn-panel">${warns.map((w) => `<div>⚠ ${w}</div>`).join("")}</div>` : ""}
     <div class="panel">
-      <h3>棚卸表</h3>
+      <h3>
+        棚卸表
+        ${helpBtn("closing_ledger", { size: "sm", title: "日別台帳と帳簿残について" })}
+      </h3>
       <p class="view-sub">「帳簿残」= 繰越 + 入庫 − 交換（シール・現金・口座・ポイント）。実際に棚を数えて「実棚数」に入力すると差異が出ます。商品名をクリックで日別台帳を表示。</p>
       <div class="table-scroll">
         <table class="result-table stocktake">
-          <thead><tr><th>商品</th><th>繰越</th><th>入庫計</th><th>ｼｰﾙ交換</th><th>現金</th><th>口座</th><th>ﾎﾟｲﾝﾄ</th><th>帳簿残</th><th>実棚数</th><th>差異</th></tr></thead>
+          <thead>
+            <tr>
+              <th>商品</th>
+              <th>繰越</th>
+              <th>入庫計</th>
+              <th>ｼｰﾙ交換</th>
+              <th>現金</th>
+              <th>口座</th>
+              <th>ﾎﾟｲﾝﾄ</th>
+              <th>帳簿残</th>
+              <th>実棚数 ${helpBtn("closing_physical_count", { size: "sm", title: "実棚数の入力と差異計算について" })}</th>
+              <th>差異</th>
+            </tr>
+          </thead>
           <tbody>${stocktakeRows(products, ledger, month)}</tbody>
         </table>
       </div>
@@ -411,7 +434,10 @@ export async function show() {
     ${reorderPanel(month, products, ledger, avgInfo)}
     ${detailTable(products, ledger)}
     <div class="panel">
-      <h3>保存済みの交換票</h3>
+      <h3>
+        保存済みの交換票
+        ${helpBtn("closing_pages_list", { size: "sm", title: "保存済み交換票の確認・削除について" })}
+      </h3>
       ${pagesPanel(month, products)}
     </div>`;
 

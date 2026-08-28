@@ -5,6 +5,7 @@
 import { getSetting, putSetting } from "../db.js";
 import * as mastersView from "./masters.js";
 import * as backupView from "./backup.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 let currentSubTab = "reading"; // "reading" | "masters" | "backup"
@@ -26,7 +27,10 @@ async function renderReadingSettings(container) {
   const currentDigits = Number((await getSetting("checksumDigits")) || 2);
   container.innerHTML = `
     <div class="panel">
-      <h3>合計点数の検算判定（チェックデジット）</h3>
+      <h3>
+        合計点数の検算判定（チェックデジット）
+        ${helpBtn("settings_reading", { size: "sm", title: "検算判定基準（2桁照合/3桁完全一致）について" })}
+      </h3>
       <p class="view-sub">交換票の読み取り時に、商品の単価×個数の計算合計と記入された合計枠を照合する際の判定基準を設定します。</p>
       
       <div class="setting-group">
@@ -71,7 +75,10 @@ export async function show(targetSub = null) {
 
 async function render() {
   el().innerHTML = `
-    <h2 class="view-title">設定</h2>
+    <h2 class="view-title">
+      設定
+      ${helpBtn("settings_overview", { size: "lg", title: "システム設定の全体概要" })}
+    </h2>
     <div class="settings-subnav">
       <button class="subnav-btn ${currentSubTab === "reading" ? "active" : ""}" data-sub="reading">読み取り・検算設定</button>
       <button class="subnav-btn ${currentSubTab === "masters" ? "active" : ""}" data-sub="masters">商品・交換票</button>

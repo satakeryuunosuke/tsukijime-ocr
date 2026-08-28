@@ -12,6 +12,7 @@ import { downloadCsv } from "../csv.js";
 import { toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { formatYm, parseYm, nextYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 const ASSETS = "public/assets/";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -348,7 +349,10 @@ export async function show() {
 
   const editPanel = editing ? `
     <div class="panel">
-      <h3>商品の入れ替え（新しいマスタを作成）</h3>
+      <h3>
+        商品の入れ替え（新しいマスタを作成）
+        ${helpBtn("settings_master_edit", { size: "sm", title: "商品の追加・点数変更と適用開始月について" })}
+      </h3>
       <p class="view-sub">保存すると新しいバージョンになります（過去の月のデータには影響しません）。
       商品の並び順は<b>交換票の並び（左の列の上から順）と同じ</b>にしてください。</p>
       <table class="entry-table">
@@ -361,7 +365,10 @@ export async function show() {
         <button id="mstAdd" class="btn-sub">＋ 商品を追加</button>
       </div>
       <div class="panel">
-        <h3>交換票（Excel）の更新</h3>
+        <h3>
+          交換票（Excel）の更新
+          ${helpBtn("settings_xlsx_template", { size: "sm", title: "Excel交換票テンプレートによる自動ROI割り当てについて" })}
+        </h3>
         <p class="view-sub">座標の状態: ${coordStatus}</p>
         <ol class="mst-steps">
           <li>「現在の交換票をダウンロード」でExcelファイルを取得</li>
@@ -377,6 +384,7 @@ export async function show() {
         </div>
         <div class="row-actions">
           <button id="mstRoiScan" class="btn-sub">（予備）印刷物のスキャンから座標を設定</button>
+          ${helpBtn("settings_scan_roi", { size: "sm", title: "スキャン画像からのROI手動エディタについて" })}
         </div>
       </div>
       <div class="row-actions">
@@ -390,13 +398,19 @@ export async function show() {
       </div>
     </div>` : `
     <div class="panel">
-      <h3>商品の入れ替え</h3>
+      <h3>
+        商品の入れ替え
+        ${helpBtn("settings_master_edit", { size: "sm", title: "商品の追加・点数変更について" })}
+      </h3>
       <p class="view-sub">商品の追加・削除・点数変更と、交換票（Excel）の更新を行います。</p>
       <button id="mstEdit" class="btn">商品マスタを編集する</button>
     </div>`;
 
   el().innerHTML = `
-    <h2 class="view-title">商品マスタ・交換票</h2>
+    <h2 class="view-title">
+      商品マスタ・交換票
+      ${helpBtn("settings_masters", { size: "lg", title: "商品マスタ・交換票の管理概要" })}
+    </h2>
     <div class="panel">
       <h3>${formatYm(app.ym)} の商品マスタ（v${month.masterVersion}）</h3>
       <table class="result-table">
@@ -405,7 +419,10 @@ export async function show() {
       </table>
     </div>
     <div class="panel">
-      <h3>交換票（Excel）</h3>
+      <h3>
+        交換票（Excel）
+        ${helpBtn("settings_xlsx_template", { size: "sm", title: "Excel交換票テンプレートについて" })}
+      </h3>
       <p class="view-sub">この月のマスタに対応する交換票です。ダウンロードしてExcelから印刷してください（A4縦・1枚に2票→切って使用）。</p>
       <div class="row-actions">
         <button id="mstDl" class="btn">交換票（Excel）をダウンロード</button>

@@ -6,6 +6,7 @@ import { toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm, prevYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 const el = () => document.getElementById("view-carryover");
@@ -66,15 +67,25 @@ export async function show() {
     </div>` : "";
 
   el().innerHTML = `
-    <h2 class="view-title">繰越在庫（${formatYm(app.ym)}の月初在庫）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      繰越在庫（${formatYm(app.ym)}の月初在庫）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("carryover_overview", { size: "lg", title: "繰越在庫の目的と入力方法" })}
+    </h2>
     ${lockBannerHtml}
     <p class="view-sub">月初時点で棚にある数を商品ごとに入力してください。${month.carryover ? "" : "<b>未入力です。</b>"}</p>
     <div class="row-actions">
       <button id="coFillLedger" class="btn-sub" ${isLocked ? "disabled" : ""}>前月（${formatYm(pym)}）の帳簿残から自動入力</button>
       <button id="coFillPhys" class="btn-sub" ${isLocked ? "disabled" : ""}>前月（${formatYm(pym)}）の実棚数から自動入力</button>
+      ${helpBtn("carryover_auto_fill", { size: "sm", title: "前月データからのワンタップ自動入力について" })}
     </div>
     <table class="entry-table">
-      <thead><tr><th>商品</th><th>点数</th><th>繰越在庫数</th></tr></thead>
+      <thead>
+        <tr>
+          <th>商品</th>
+          <th>点数</th>
+          <th>繰越在庫数 ${helpBtn("carryover_keynav", { size: "sm", title: "Enter/矢印キーによる高速入力について" })}</th>
+        </tr>
+      </thead>
       <tbody>
         ${master.products.map((p) => `
           <tr>

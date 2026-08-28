@@ -5,6 +5,7 @@ import { initBackend } from "./backend.js";
 import { loadProducts } from "./products.js";
 import { getAllMasters, putMaster } from "./db.js";
 import { formatYm, parseYm, ymShift, defaultYmByRule } from "./dateUtils.js";
+import { initGlobalHelpListener, initHelpShortcuts } from "./help.js";
 import * as home from "./views/home.js";
 import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
@@ -109,6 +110,10 @@ async function init() {
 
   // ルーティング
   window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "home"));
+
+  // ヘルプ機能（取説・ヒントポップアップ）の初期化
+  initGlobalHelpListener();
+  initHelpShortcuts(() => app.currentView);
 
   // 各ビューの初期化（イベント紐付け）
   for (const v of Object.values(VIEWS)) {

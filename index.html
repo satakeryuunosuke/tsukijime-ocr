@@ -13,12 +13,12 @@
   <header>
     <div class="head-row">
       <div>
-        <h1>グッズ交換・月締めシステム</h1>
+        <h1>グッズ交換・月締めシステム <button type="button" class="help-btn help-btn-light" data-help="header_overview" title="システムの全体概要・使い方">?</button></h1>
         <p class="sub">交換票の読み取りから棚卸・レポート出力までブラウザで完結（オフライン・端末内処理）</p>
       </div>
       <div class="ym-bar">
         <button id="ymPrev" class="ym-btn" title="前の月">◀</button>
-        <label>対象年月 <input id="ymInput" type="text" placeholder="2026年07月" size="9" /></label>
+        <label class="ym-label">対象年月 <input id="ymInput" type="text" placeholder="2026年07月" size="9" /><button type="button" class="help-btn help-btn-light help-btn-sm" data-help="header_ym" title="対象年月の選び方・自動判定ルール">?</button></label>
         <button id="ymNext" class="ym-btn" title="次の月">▶</button>
       </div>
     </div>
@@ -40,8 +40,11 @@
 
     <!-- 読み取り（AI-OCR） -->
     <section id="view-reader" class="view" hidden>
+      <div class="view-head-wrap" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.75rem">
+        <h2 class="view-title" style="margin:0">交換票の読み取り（AI-OCR） <button type="button" class="help-btn help-btn-lg" data-help="reader_overview" title="読み取り全体の流れ・取説">?</button></h2>
+      </div>
       <section id="dropzone" class="dropzone">
-        <p class="dz-title">交換票の PDF または 画像をドラッグ＆ドロップ</p>
+        <p class="dz-title">交換票の PDF または 画像をドラッグ＆ドロップ <button type="button" class="help-btn help-btn-sm" data-help="reader_dropzone" title="ファイル選択・対応形式について">?</button></p>
         <p class="dz-or">または</p>
         <label class="btn">
           ファイルを選択
@@ -60,12 +63,13 @@
           <div class="dl">
             <button id="downloadBtn" class="btn" disabled>CSV ダウンロード</button>
             <button id="downloadAggBtn" class="btn" disabled>日別集計CSV</button>
+            <button type="button" class="help-btn help-btn-sm" data-help="reader_csv_export" title="CSV出力について">?</button>
           </div>
         </div>
         <p id="savedInfo" class="status"></p>
         <section id="needFixWrap" class="needfix-panel" hidden>
           <div class="results-head">
-            <h3 class="needfix-title">⚠ 対応が必要な読み取り結果</h3>
+            <h3 class="needfix-title">⚠ 対応が必要な読み取り結果 <button type="button" class="help-btn help-btn-sm" data-help="reader_needfix" title="要対応の確認・訂正方法について">?</button></h3>
             <div class="needfix-actions">
               <button id="approveLowBtn" class="btn-approve-low" hidden>✓ 低信頼度のみのページをまとめて承認</button>
               <button id="fixAllBtn" class="btn">まとめて修正</button>
@@ -78,7 +82,7 @@
             <tbody id="needFixBody"></tbody>
           </table>
         </section>
-        <h3 class="okpages-title">確定した読み取り結果（自動保存）</h3>
+        <h3 class="okpages-title">確定した読み取り結果（自動保存） <button type="button" class="help-btn help-btn-sm" data-help="reader_approved" title="確定済みデータと自動保存について">?</button></h3>
         <table class="result-table">
           <thead>
             <tr><th>ページ</th><th>日付</th><th>認識結果</th><th>状態</th><th></th></tr>

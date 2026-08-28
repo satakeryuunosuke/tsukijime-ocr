@@ -7,6 +7,7 @@
 import { detectMarkers, orderPoints } from "./markerDetector.js";
 import { transformImage, OUTPUT_WIDTH, OUTPUT_HEIGHT } from "./geometry.js";
 import { openPdf, renderPdfPage } from "./pdf.js";
+import { helpBtn } from "./help.js";
 
 const ASSETS = "public/assets/";
 
@@ -42,7 +43,10 @@ export function openAssignSession(opts) {
     overlay.innerHTML = `
       <div class="rv-modal">
         <div class="rv-head">
-          <div class="rv-title">交換票の座標設定</div>
+          <div class="rv-title-wrap">
+            <span class="rv-title">交換票の座標設定</span>
+            ${helpBtn("modal_roi_editor", { size: "sm", title: "ROI座標設定エディタの使い方" })}
+          </div>
           <button class="rv-close" id="asClose">✕</button>
         </div>
         <div class="rv-body" id="asBody"></div>
@@ -254,7 +258,10 @@ export function openRoiEditor(products) {
     overlay.innerHTML = `
       <div class="rv-modal">
         <div class="rv-head">
-          <div class="rv-title">スキャンからの座標設定</div>
+          <div class="rv-title-wrap">
+            <span class="rv-title">スキャンからの座標設定</span>
+            ${helpBtn("modal_roi_editor", { size: "sm", title: "スキャン画像からのROIエディタについて" })}
+          </div>
           <button class="rv-close" id="reClose">✕</button>
         </div>
         <div class="rv-body" id="reBody"></div>

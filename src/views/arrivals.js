@@ -5,6 +5,7 @@ import { daysInMonth, toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 let selectedDay = 1;
@@ -133,7 +134,10 @@ export async function show() {
     </div>` : "";
 
   el().innerHTML = `
-    <h2 class="view-title">入庫の記録（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      入庫の記録（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("arrivals_overview", { size: "lg", title: "入庫記録の目的と操作方法" })}
+    </h2>
     ${lockBannerHtml}
     <p class="view-sub">グッズが届いた日を選び、届いた個数を入力して保存してください。</p>
 
@@ -152,6 +156,7 @@ export async function show() {
                 </select>
               </label>
               <button id="arNextDay" class="ar-date-nav-btn" ${selectedDay >= maxDays ? "disabled" : ""}>翌日 ▶</button>
+              ${helpBtn("arrivals_calendar_nav", { size: "sm", title: "日付選択と入庫カレンダーについて" })}
             </div>
             <div class="view-sub" style="margin: 0;">● = 入庫あり</div>
           </div>
@@ -195,6 +200,7 @@ export async function show() {
             <span class="ar-total-label">${selectedDay}日の合計入庫数:</span>
             <span id="arTotalNum" class="ar-total-num">${dayTotal.toLocaleString()}</span>
             <span class="ar-total-unit">個</span>
+            ${helpBtn("arrivals_input", { size: "sm", title: "入庫数の入力と保存について" })}
           </div>
           <div class="ar-actions">
             <button id="arClear" class="btn-sub" type="button" ${isLocked ? "disabled" : ""}>この日の入力をクリア</button>

@@ -8,6 +8,7 @@ import { predictNumbers } from "./predictor.js";
 import { drawOverlay } from "./overlay.js";
 import { validatePage, qtyOf, toInt, fillTotalFromQty } from "./validate.js";
 import { bindGridNav } from "./keynav.js";
+import { helpBtn } from "./help.js";
 
 // ROI名（date_0, notes_Y_1 など）→ 日本語の項目名
 function fieldLabel(name, products = []) {
@@ -60,6 +61,7 @@ export function openReview(page, ctx) {
           <div class="rv-title-wrap">
             <span class="rv-title"></span>
             <span class="rv-status-badge"></span>
+            ${helpBtn("modal_review", { size: "sm", title: "交換票の訂正・手動補正モーダルの使い方" })}
           </div>
           <button class="rv-close" title="閉じる">✕</button>
         </div>

@@ -13,6 +13,7 @@ import { downloadCsv } from "../csv.js";
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm, prevYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 const el = () => document.getElementById("view-cash");
@@ -218,7 +219,10 @@ function checkPanel(month, products, prices, salesByDay, cash) {
   }
   return `
     <div class="panel">
-      <h3>つじつまチェック</h3>
+      <h3>
+        つじつまチェック
+        ${helpBtn("cash_reconciliation", { size: "sm", title: "つじつまチェックの計算式と判定について" })}
+      </h3>
       ${warns.map((w) => `<p class="err">⚠ ${w}</p>`).join("")}
       ${verdict}
     </div>`;
@@ -240,7 +244,10 @@ function withdrawalsPanel(cash, isLocked = false) {
     .map((d) => `${DENOM_NAMES[d]}×${toInt(w.counts[d])}`).join(" ");
   return `
     <div class="panel">
-      <h3>本部への売上持ち出し</h3>
+      <h3>
+        本部への売上持ち出し
+        ${helpBtn("cash_withdrawals", { size: "sm", title: "売上持ち出し記録について" })}
+      </h3>
       <p class="view-sub">売り上げを本部に持ち出したら、その都度ここに記録してください。</p>
       ${isLocked ? "" : `<div class="row-actions"><button id="cashWdAdd" class="btn">持ち出しを記録する</button></div>`}
       ${items.length ? `
@@ -263,7 +270,10 @@ function denomTablePanel(cash, salesByDay) {
   if (!cash.opening || !cash.closing) {
     return `
       <div class="panel">
-        <h3>本部報告用・日別金種表</h3>
+        <h3>
+          本部報告用・日別金種表
+          ${helpBtn("cash_daily_report", { size: "sm", title: "日別金種表とCSV出力について" })}
+        </h3>
         <p class="view-sub">月初と月末の金種を入力・保存すると、毎日の金種枚数の表を自動作成します。</p>
       </div>`;
   }
@@ -277,7 +287,10 @@ function denomTablePanel(cash, salesByDay) {
   const hasWd = cash.withdrawals.length > 0;
   return `
     <div class="panel">
-      <h3>本部報告用・日別金種表</h3>
+      <h3>
+        本部報告用・日別金種表
+        ${helpBtn("cash_daily_report", { size: "sm", title: "日別金種表とCSV出力について" })}
+      </h3>
       <p class="view-sub">月初の金種と日々の現金売上・持ち出しから、つじつまの合う毎日の金種枚数を自動で補間した表です。金種の増減は「お客さんがどの金種で支払い、どの金種でお釣りを渡したか」として売上のあった日に割り当て、持ち出しは記録した日にその金種のまま減らします。売上も持ち出しもない日は変動しません。そのまま報告書に転記できます。</p>
       ${warn}
       <div class="table-scroll">
@@ -326,16 +339,23 @@ export async function show() {
     </div>` : "";
 
   el().innerHTML = `
-    <h2 class="view-title">現金管理（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    <h2 class="view-title">
+      現金管理（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
+      ${helpBtn("cash_overview", { size: "lg", title: "現金管理と金庫つじつまチェックの概要" })}
+    </h2>
     ${lockBannerHtml}
     <p class="view-sub">ノートの現金販売で受け取った現金を管理します。月末に金庫の現金を数えて入力すると、売上記録とのつじつまを自動チェックします。</p>
 
     <div class="panel">
-      <h3>現金の枚数（金種別）</h3>
+      <h3>
+        現金の枚数（金種別）
+        ${helpBtn("cash_denoms", { size: "sm", title: "金種別枚数の入力について" })}
+      </h3>
       <p class="view-sub">月初（前月から引き継いだ時点）と月末（締めのとき）に数えた枚数を入力してください。</p>
       <div class="row-actions">
         <button id="cashFillPrev" class="btn-sub" ${isLocked ? "disabled" : ""}>前月（${formatYm(pym)}）の月末金種を月初に引き継ぐ</button>
         <button id="cashPrices" class="btn-sub">ノート単価の設定…</button>
+        ${helpBtn("cash_unit_price", { size: "sm", title: "ノート単価設定について" })}
       </div>
       <table class="entry-table cash-denoms">
         <thead><tr><th>金種</th><th>月初（枚）</th><th>月末（枚）</th></tr></thead>

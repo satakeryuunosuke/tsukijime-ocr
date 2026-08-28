@@ -4,6 +4,7 @@ import { exportAll, importAll, getAllMonths, getMonth, getMaster } from "../db.j
 import { downloadCsv } from "../csv.js";
 import { buildMonthlyCsvs } from "../ledger.js";
 import { formatYm } from "../dateUtils.js";
+import { helpBtn } from "../help.js";
 
 let app = null;
 const el = () => document.getElementById("view-backup");
@@ -71,14 +72,20 @@ export async function show() {
     .join("");
 
   el().innerHTML = `
-    <h2 class="view-title">データ管理（バックアップ・引き継ぎ）</h2>
+    <h2 class="view-title">
+      データ管理（バックアップ・引き継ぎ）
+      ${helpBtn("settings_backup", { size: "lg", title: "データ管理とバックアップの重要性" })}
+    </h2>
     <div class="panel warn-panel">
       <b>⚠ 大切:</b> データはこの端末のブラウザ内にだけ保存されています。
       ブラウザの「サイトデータを削除」や端末の初期化で消えるため、<b>月に一度はバックアップを保存</b>してください。
       後任への引き継ぎも、このバックアップファイルを渡して新しい端末で「インポート」するだけです。
     </div>
     <div class="panel">
-      <h3>バックアップ（全データ）</h3>
+      <h3>
+        バックアップ（全データ）
+        ${helpBtn("backup_export_import", { size: "sm", title: "全データJSONバックアップの保存・復元について" })}
+      </h3>
       <div class="row-actions">
         <button id="bkExport" class="btn">バックアップを保存（JSON）</button>
         <label class="btn btn-secondary">バックアップから復元（インポート）
@@ -87,7 +94,10 @@ export async function show() {
       </div>
     </div>
     <div class="panel">
-      <h3>月ごとのCSVダウンロード</h3>
+      <h3>
+        月ごとのCSVダウンロード
+        ${helpBtn("backup_monthly_csv", { size: "sm", title: "月次CSV一式ダウンロードについて" })}
+      </h3>
       <p class="view-sub">旧デスクトップ版と同じ5種類のCSV（読み取り結果・日別集計・繰越・入庫・ノート購入）をダウンロードします。</p>
       <table class="result-table">
         <thead><tr><th>年月</th><th>読み取り</th><th>繰越</th><th>入庫</th><th>ノート購入</th><th>実棚</th><th></th></tr></thead>
