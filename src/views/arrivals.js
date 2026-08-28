@@ -37,6 +37,7 @@ function updateLiveStats() {
 
 async function saveDay() {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため保存できません。"); return; }
   const data = {};
   let any = false;
   el().querySelectorAll("input[data-key]").forEach((inp) => {
@@ -52,6 +53,7 @@ async function saveDay() {
 
 async function deleteDay(d) {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため削除できません。"); return; }
   if (!month.arrivals || !month.arrivals[d]) return;
   if (!window.confirm(`${d}日の入庫記録を削除しますか？`)) return;
   delete month.arrivals[d];
@@ -117,8 +119,22 @@ export async function show() {
 
   const dayTotal = Object.values(dayData).reduce((sum, v) => sum + toInt(v), 0);
 
+  const isLocked = !!month.locked;
+
+  const lockBannerHtml = isLocked ? `
+    <div class="lock-banner">
+      <div class="lock-banner-info">
+        <span class="lock-icon">🔒</span>
+        <div>
+          <div class="lock-title">この月（${formatYm(app.ym)}）は月締め確定（ロック中）です</div>
+          <div class="lock-meta">誤操作防止のため編集できません。「月締め」画面からロックを解除できます。</div>
+        </div>
+      </div>
+    </div>` : "";
+
   el().innerHTML = `
-    <h2 class="view-title">入庫の記録（${formatYm(app.ym)}）</h2>
+    <h2 class="view-title">入庫の記録（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    ${lockBannerHtml}
     <p class="view-sub">グッズが届いた日を選び、届いた個数を入力して保存してください。</p>
 
     <div class="ar-container">
@@ -162,11 +178,11 @@ export async function show() {
                 </div>
                 <div class="ar-card-body">
                   <div class="ar-quick-chips">
-                    <button type="button" class="ar-chip" data-add="${lot}" data-target="${p.key}">+${lot}</button>
+                    <button type="button" class="ar-chip" data-add="${lot}" data-target="${p.key}" ${isLocked ? "disabled" : ""}>+${lot}</button>
                   </div>
                   <div class="ar-input-wrap">
                     <input type="number" inputmode="numeric" min="0" data-key="${p.key}" class="ar-input"
-                           value="${val || ""}" placeholder="0" />
+                           value="${val || ""}" placeholder="0" ${isLocked ? "disabled" : ""} />
                   </div>
                 </div>
               </div>`;
@@ -181,8 +197,8 @@ export async function show() {
             <span class="ar-total-unit">個</span>
           </div>
           <div class="ar-actions">
-            <button id="arClear" class="btn-sub" type="button">この日の入力をクリア</button>
-            <button id="arSave" class="btn" type="button">この日の入庫を保存</button>
+            <button id="arClear" class="btn-sub" type="button" ${isLocked ? "disabled" : ""}>この日の入力をクリア</button>
+            <button id="arSave" class="btn" type="button" ${isLocked ? "disabled" : ""}>この日の入庫を保存</button>
           </div>
         </div>
       </div>
@@ -224,7 +240,7 @@ export async function show() {
                   </div>
                   <div class="ar-hist-btns">
                     <button class="btn-sub" style="padding: .25rem .5rem;" data-editday="${d}">編集</button>
-                    <button class="btn-sub" style="padding: .25rem .5rem; color: var(--err);" data-delday="${d}">削除</button>
+                    ${isLocked ? "" : `<button class="btn-sub" style="padding: .25rem .5rem; color: var(--err);" data-delday="${d}">削除</button>`}
                   </div>
                 </div>`).join("")}
             </div>` : `<p class="view-sub" style="margin: .4rem 0 0;">この月の入庫記録はありません。</p>`}

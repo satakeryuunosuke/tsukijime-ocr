@@ -77,6 +77,8 @@ export function emptyMonth(ym, masterVersion) {
     physicalCount: null,// { productKey: qty } 未入力なら null
     cash: null,         // { opening, closing: {金種:枚数}|null, withdrawals: [{id,day,counts}] } 未入力なら null
     readerPending: null,// { fail, ng, low } 読み取りの要対応件数（ホーム表示用）。無ければ null
+    locked: false,      // 月締め確定（ロック）状態。true なら編集不可
+    lockedAt: null,     // ロック日時（ISO文字列）
     note: "",
     updatedAt: null,
   };

@@ -784,3 +784,112 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
   margin-top: .5rem;
   animation: fadeIn .2s;
 }
+
+/* 月締め確定（ロック）関連スタイル */
+.lock-banner {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: .85rem 1.15rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .75rem;
+  box-shadow: 0 4px 12px rgba(15,23,42,.12);
+}
+.lock-banner-info {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+.lock-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.lock-title {
+  font-weight: 700;
+  font-size: .95rem;
+}
+.lock-meta {
+  font-size: .8rem;
+  color: #94a3b8;
+  margin-top: .15rem;
+}
+.btn-lock {
+  background: #0f766e;
+  color: #fff;
+  border: none;
+  padding: .55rem 1.1rem;
+  border-radius: 8px;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  transition: background .15s;
+}
+.btn-lock:hover {
+  background: #115e59;
+}
+.btn-unlock {
+  background: #334155;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+  padding: .45rem .9rem;
+  border-radius: 7px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  transition: all .15s;
+}
+.btn-unlock:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  font-size: .75rem;
+  font-weight: 700;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+  margin-left: .5rem;
+  vertical-align: middle;
+}
+.backup-modal-content {
+  text-align: center;
+  padding: 1.25rem .75rem;
+}
+.backup-modal-icon {
+  font-size: 2.5rem;
+  margin-bottom: .5rem;
+}
+.backup-modal-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 .5rem;
+  color: var(--text);
+}
+.backup-modal-desc {
+  font-size: .9rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 1.5rem;
+}
+.backup-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+

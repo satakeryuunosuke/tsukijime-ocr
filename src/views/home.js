@@ -19,6 +19,12 @@ export function init(appRef) { app = appRef; }
 
 // 次にやるべき工程を1つ決めて、でかでかと表示するバナー
 function nextAction(month) {
+  if (month.locked) {
+    return {
+      view: "closing", cls: "done", title: "月締め確定済み（ロック中） 🔒",
+      desc: "この月の月締め作業は完了し、データはロックされています。Excelレポートのダウンロードやバックアップの保存が可能です。",
+    };
+  }
   const p = month.readerPending;
   const pendingN = p ? (p.fail || 0) + (p.ng || 0) + (p.low || 0) : 0;
   if (pendingN) {
@@ -41,14 +47,17 @@ function nextAction(month) {
     return { view: "cash", cls: "", title: "月末の現金を数えて入力する", desc: "金庫の現金を金種別に数えて入力すると、売上とのつじつまを自動チェックします。" };
   if (month.physicalCount === null)
     return { view: "closing", cls: "", title: "実棚数を入力して棚卸する", desc: "実際に棚を数えて入力し、帳簿残との差異を確認します。" };
-  return { view: "closing", cls: "done", title: "この月の作業は完了しています ✓", desc: "下のボタンからExcelレポートをダウンロード（またはプレビュー）して本部に報告してください。" };
+  return {
+    view: "closing", cls: "warn", title: "月締めを確定（ロック）する 🔒",
+    desc: "実棚数の保存が完了しています。Excelレポートを確認後、「月締め」画面から締め確定（ロック）を行ってください。",
+  };
 }
 
 export async function show() {
   const ym = app.ym;
   const month = await ensureMonth(ym);
   const master = await getMaster(month.masterVersion);
-  const y = ym.slice(0, 4), m = parseInt(ym.slice(4, 6), 10);
+  const isLocked = !!month.locked;
 
   const pagesN = month.pages.length;
   const carryoverDone = month.carryover !== null;
@@ -64,8 +73,12 @@ export async function show() {
     ? `<span class="err">要対応 ${pendingN} 件</span>`
     : (pagesN ? `保存済み ${pagesN} 枚` : "未読み取り");
 
+  const closingStatus = isLocked
+    ? "締め確定（ロック中） 🔒"
+    : (physDone ? "実棚入力済み ✓" : "未実施");
+
   el().innerHTML = `
-    <h2 class="view-title">${formatYm(ym)} の月締め</h2>
+    <h2 class="view-title">${formatYm(ym)} の月締め${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
     <a class="home-next ${na.cls}" href="#${na.view}">
       <div class="hn-label">次にやること</div>
       <div class="hn-title">${na.title}</div>
@@ -88,8 +101,8 @@ export async function show() {
         specialsN > 0, "現金・口座振替・栄冠ポイントでのノート購入を手入力します。")}
       ${card("cash", "5. 現金管理", cashDone ? "月末現金入力済み ✓" : "未入力",
         cashDone, "月末に金庫の現金を数えて入力すると、ノートの現金売上とのつじつまを自動チェックします。本部報告用の日別金種表も作れます。")}
-      ${card("closing", "6. 月締め（棚卸）", physDone ? "実棚入力済み ✓" : "未実施",
-        physDone, "日別台帳と月末の帳簿残を確認し、実際の在庫数と突き合わせてExcelレポートを出力します。")}
+      ${card("closing", "6. 月締め（棚卸）", closingStatus,
+        physDone, "日別台帳と月末の帳簿残を確認し、実際の在庫数と突き合わせてExcelレポートを出力・月締め確定します。")}
     </div>
     <div class="home-links">
       <a href="#settings">システム設定（検算桁数・商品マスタ・データ管理） →</a>

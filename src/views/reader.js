@@ -192,6 +192,10 @@ function renderResults() {
 async function saveOkPagesToMonth() {
   if (!sessionYm) return;
   const month = await ensureMonth(sessionYm);
+  if (month.locked) {
+    console.warn("月締め確定（ロック中）のため保存をスキップしました");
+    return;
+  }
   const okPages = pages.filter(isFullyOk);
   if (okPages.length) {
     const byName = new Map(month.pages.map((p) => [p.name, p]));
@@ -215,6 +219,10 @@ async function renderSavedInfo() {
   const ym = sessionYm || app.ym;
   const month = await ensureMonth(ym);
   const okNow = pages.filter(isFullyOk).length;
+  if (month.locked) {
+    $("savedInfo").innerHTML = `<b class="warn">🔒 この月（${formatYm(ym)}）は月締め確定（ロック中）です。データの追加・編集はできません。</b>`;
+    return;
+  }
   $("savedInfo").textContent =
     `✓OK のページは自動で ${formatYm(ym)} の月データに保存されます（保存済み: ${month.pages.length} 枚）。` +
     (okNow ? "" : " まだ確定したページがありません。");
@@ -262,6 +270,11 @@ let currentCtx = null; // 直近の処理に使ったコンテキスト（訂正
 
 async function handleFiles(files) {
   if (!app.engine) return;
+  const month = await ensureMonth(app.ym);
+  if (month.locked) {
+    alert(`この月（${formatYm(app.ym)}）は月締め確定（ロック）されているため、新しい交換票の読み取りはできません。\n読み取りを行う場合は「月締め」タブからロックを解除してください。`);
+    return;
+  }
   $("fileInput").disabled = true;
   $("downloadBtn").disabled = true;
   $("results").hidden = false;
@@ -373,17 +386,30 @@ export function init(appRef) {
 
 // タブ表示時（対象年月の変更時にも呼ばれる）
 export async function show() {
+  const month = await ensureMonth(app.ym);
   if (app.engine) {
-    setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
-    $("fileInput").disabled = false;
+    if (month.locked) {
+      setStatus(`🔒 この月（${formatYm(app.ym)}）は月締め確定（ロック中）のため読み取りできません。（月締めタブでロック解除可能）`);
+      $("fileInput").disabled = true;
+    } else {
+      setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
+      $("fileInput").disabled = false;
+    }
   }
   await renderSavedInfo();
 }
 
 // エンジン初期化完了時に main.js から呼ばれる
-export function onEngineReady() {
-  setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
-  $("fileInput").disabled = false;
+export async function onEngineReady() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) {
+    setStatus(`🔒 この月（${formatYm(app.ym)}）は月締め確定（ロック中）のため読み取りできません。（月締めタブでロック解除可能）`);
+    $("fileInput").disabled = true;
+  } else {
+    setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
+    $("fileInput").disabled = false;
+  }
 }
 
 export function setLoadStatus(msg) { setStatus(msg); }
+

@@ -14,6 +14,9 @@ export const DENOM_NAMES = {
 };
 const PAY_DENOMS = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1];
 
+// ノート単価の既定値（円）
+export const DEFAULT_NOTE_PRICE = 100;
+
 // 金種別枚数 {denom: count} → 合計金額（円）
 export function cashTotal(counts) {
   if (!counts) return 0;
@@ -21,14 +24,19 @@ export function cashTotal(counts) {
 }
 
 // 日別の現金売上（円）。specials の method==='cash' の明細 × 単価。
-// prices: { productKey: 円 }。返り値: Map(day -> 円)
-export function dailyCashSales(month, products, prices) {
+// prices: { productKey: 円 }。未設定の場合は既定値 DEFAULT_NOTE_PRICE (100円) を使用。返り値: Map(day -> 円)
+export function dailyCashSales(month, products, prices = {}) {
   const notes = noteProducts(products);
   const byDay = new Map();
   for (const s of month.specials || []) {
     if (s.method !== "cash") continue;
     let yen = 0;
-    for (const p of notes) yen += toInt(s.qty[p.key]) * toInt(prices[p.key]);
+    for (const p of notes) {
+      const price = (prices && prices[p.key] !== undefined && prices[p.key] !== null && prices[p.key] !== "")
+        ? toInt(prices[p.key])
+        : DEFAULT_NOTE_PRICE;
+      yen += toInt(s.qty[p.key]) * price;
+    }
     const day = toInt(s.day);
     if (yen > 0) byDay.set(day, (byDay.get(day) || 0) + yen);
   }
@@ -53,14 +61,17 @@ function withdrawalsByDay(withdrawals) {
   return byDay;
 }
 
-// 単価未設定（0円）のまま現金販売記録がある商品キーの一覧（チェック用）
-export function unpricedCashKeys(month, products, prices) {
+// 単価が0円以下のまま現金販売記録がある商品キーの一覧（チェック用）
+export function unpricedCashKeys(month, products, prices = {}) {
   const notes = noteProducts(products);
   const keys = new Set();
   for (const s of month.specials || []) {
     if (s.method !== "cash") continue;
     for (const p of notes) {
-      if (toInt(s.qty[p.key]) > 0 && toInt(prices[p.key]) <= 0) keys.add(p.key);
+      const price = (prices && prices[p.key] !== undefined && prices[p.key] !== null && prices[p.key] !== "")
+        ? toInt(prices[p.key])
+        : DEFAULT_NOTE_PRICE;
+      if (toInt(s.qty[p.key]) > 0 && price <= 0) keys.add(p.key);
     }
   }
   return [...keys];

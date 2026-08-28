@@ -8,7 +8,7 @@ import { formatYm } from "../dateUtils.js";
 let app = null;
 const el = () => document.getElementById("view-backup");
 
-function downloadJson(obj, filename) {
+export function downloadJson(obj, filename) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -18,10 +18,14 @@ function downloadJson(obj, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function onExport() {
+export async function triggerBackupDownload() {
   const data = await exportAll();
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   downloadJson(data, `tsukijime_backup_${stamp}.json`);
+}
+
+async function onExport() {
+  await triggerBackupDownload();
 }
 
 async function onImport(file) {

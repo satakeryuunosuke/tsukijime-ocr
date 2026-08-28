@@ -7,6 +7,7 @@ import { toInt, daysInMonth } from "../validate.js";
 import {
   DENOMS, DENOM_NAMES, cashTotal, dailyCashSales, unpricedCashKeys,
   withdrawalsTotal, buildDailyDenomTable, buildCashReportCsv,
+  DEFAULT_NOTE_PRICE,
 } from "../cash.js";
 import { downloadCsv } from "../csv.js";
 import { bindGridNav } from "../keynav.js";
@@ -57,6 +58,7 @@ function collectDenoms(root, attr) {
 
 async function saveCash() {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため保存できません。"); return; }
   const cash = cashOf(month);
   month.cash = {
     opening: collectDenoms(el(), "data-open"),
@@ -70,6 +72,8 @@ async function saveCash() {
 
 // 前月の月末金種を今月の月初欄へ流し込む
 async function fillOpeningFromPrev() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
   const pym = prevYm(app.ym);
   const prev = await getMonth(pym);
   const closing = prev && prev.cash && prev.cash.closing;
@@ -83,16 +87,21 @@ async function fillOpeningFromPrev() {
 async function openPricesModal(notes) {
   const prices = (await getSetting("notePrices")) || {};
   const { body, close } = openModal("ノートの販売単価（円）", `
-    <p class="view-sub">現金売上の計算に使います。値上げ等がなければ一度設定するだけでOKです（全部の月で共通）。</p>
+    <p class="view-sub">現金売上の計算に使います。既定値は${DEFAULT_NOTE_PRICE}円です。変更がなければそのままでOKです（全部の月で共通）。</p>
     <table class="entry-table">
       <thead><tr><th>商品</th><th>単価（円）</th></tr></thead>
       <tbody>
-        ${notes.map((p) => `
+        ${notes.map((p) => {
+          const val = (prices && prices[p.key] !== undefined && prices[p.key] !== null && prices[p.key] !== "")
+            ? toInt(prices[p.key])
+            : DEFAULT_NOTE_PRICE;
+          return `
           <tr>
             <td>${p.name}</td>
             <td><input type="number" inputmode="numeric" min="0" data-price="${p.key}"
-                 value="${toInt(prices[p.key]) || ""}" placeholder="0" /></td>
-          </tr>`).join("")}
+                 value="${val}" placeholder="${DEFAULT_NOTE_PRICE}" /></td>
+          </tr>`;
+        }).join("")}
       </tbody>
     </table>
     <div class="rv-actions"><button class="btn" id="mdPriceSave">単価を保存</button></div>`);
@@ -101,7 +110,7 @@ async function openPricesModal(notes) {
   body.querySelector("#mdPriceSave").addEventListener("click", async () => {
     const next = (await getSetting("notePrices")) || {};
     body.querySelectorAll("input[data-price]").forEach((inp) => {
-      next[inp.dataset.price] = toInt(inp.value);
+      next[inp.dataset.price] = inp.value === "" ? DEFAULT_NOTE_PRICE : toInt(inp.value);
     });
     await putSetting("notePrices", next);
     close();
@@ -111,6 +120,8 @@ async function openPricesModal(notes) {
 
 // ---- 本部への持ち出しポップアップ ----
 async function openWithdrawalModal() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため持ち出しを記録できません。"); return; }
   const maxDays = daysInMonth(app.ym);
   const { body, close } = openModal("本部への売上持ち出しを記録", `
     <p class="view-sub">本部に持ち出した現金を金種別に入力してください。つじつまチェックと日別金種表に反映されます。</p>
@@ -145,15 +156,16 @@ async function openWithdrawalModal() {
     const counts = collectDenoms(body, "data-wd");
     if (!counts || cashTotal(counts) <= 0) { alert("枚数を入力してください。"); return; }
     const day = toInt(body.querySelector("#mdWdDay").value) || 1;
-    const month = await ensureMonth(app.ym);
-    const cash = cashOf(month);
+    const currentMonth = await ensureMonth(app.ym);
+    if (currentMonth.locked) { alert("月締め確定（ロック中）のため保存できません。"); return; }
+    const cash = cashOf(currentMonth);
     cash.withdrawals.push({
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       day, counts,
       createdAt: new Date().toISOString(),
     });
-    month.cash = cash;
-    await putMonth(month);
+    currentMonth.cash = cash;
+    await putMonth(currentMonth);
     close();
     await show();
   });
@@ -161,6 +173,7 @@ async function openWithdrawalModal() {
 
 async function deleteWithdrawal(id) {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため削除できません。"); return; }
   const cash = cashOf(month);
   const item = cash.withdrawals.find((w) => w.id === id);
   if (!item) return;
@@ -221,7 +234,7 @@ function salesDetail(salesByDay) {
     </table>`;
 }
 
-function withdrawalsPanel(cash) {
+function withdrawalsPanel(cash, isLocked = false) {
   const items = [...cash.withdrawals].sort((a, b) => a.day - b.day);
   const detail = (w) => DENOMS.filter((d) => toInt(w.counts[d]) > 0)
     .map((d) => `${DENOM_NAMES[d]}×${toInt(w.counts[d])}`).join(" ");
@@ -229,7 +242,7 @@ function withdrawalsPanel(cash) {
     <div class="panel">
       <h3>本部への売上持ち出し</h3>
       <p class="view-sub">売り上げを本部に持ち出したら、その都度ここに記録してください。</p>
-      <div class="row-actions"><button id="cashWdAdd" class="btn">持ち出しを記録する</button></div>
+      ${isLocked ? "" : `<div class="row-actions"><button id="cashWdAdd" class="btn">持ち出しを記録する</button></div>`}
       ${items.length ? `
         <table class="result-table narrow">
           <thead><tr><th>日付</th><th>金額</th><th>内訳</th><th></th></tr></thead>
@@ -239,7 +252,7 @@ function withdrawalsPanel(cash) {
                 <td>${w.day}日</td>
                 <td class="num">${yen(cashTotal(w.counts))}</td>
                 <td>${detail(w)}</td>
-                <td><button class="btn-sub" data-delwd="${w.id}">削除</button></td>
+                <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-delwd="${w.id}">削除</button>`}</td>
               </tr>`).join("")}
           </tbody>
         </table>` : ""}
@@ -299,16 +312,29 @@ export async function show() {
   const salesByDay = dailyCashSales(month, products, prices);
   const cash = cashOf(month);
   const pym = prevYm(app.ym);
+  const isLocked = !!month.locked;
+
+  const lockBannerHtml = isLocked ? `
+    <div class="lock-banner">
+      <div class="lock-banner-info">
+        <span class="lock-icon">🔒</span>
+        <div>
+          <div class="lock-title">この月（${formatYm(app.ym)}）は月締め確定（ロック中）です</div>
+          <div class="lock-meta">誤操作防止のため編集できません。「月締め」画面からロックを解除できます。</div>
+        </div>
+      </div>
+    </div>` : "";
 
   el().innerHTML = `
-    <h2 class="view-title">現金管理（${formatYm(app.ym)}）</h2>
+    <h2 class="view-title">現金管理（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    ${lockBannerHtml}
     <p class="view-sub">ノートの現金販売で受け取った現金を管理します。月末に金庫の現金を数えて入力すると、売上記録とのつじつまを自動チェックします。</p>
 
     <div class="panel">
       <h3>現金の枚数（金種別）</h3>
       <p class="view-sub">月初（前月から引き継いだ時点）と月末（締めのとき）に数えた枚数を入力してください。</p>
       <div class="row-actions">
-        <button id="cashFillPrev" class="btn-sub">前月（${formatYm(pym)}）の月末金種を月初に引き継ぐ</button>
+        <button id="cashFillPrev" class="btn-sub" ${isLocked ? "disabled" : ""}>前月（${formatYm(pym)}）の月末金種を月初に引き継ぐ</button>
         <button id="cashPrices" class="btn-sub">ノート単価の設定…</button>
       </div>
       <table class="entry-table cash-denoms">
@@ -318,19 +344,19 @@ export async function show() {
             <tr>
               <td>${DENOM_NAMES[d]}</td>
               <td><input type="number" inputmode="numeric" min="0" data-open="${d}"
-                   value="${cash.opening ? toInt(cash.opening[d]) : ""}" placeholder="0" /></td>
+                   value="${cash.opening ? toInt(cash.opening[d]) : ""}" placeholder="0" ${isLocked ? "disabled" : ""} /></td>
               <td><input type="number" inputmode="numeric" min="0" data-close="${d}"
-                   value="${cash.closing ? toInt(cash.closing[d]) : ""}" placeholder="0" /></td>
+                   value="${cash.closing ? toInt(cash.closing[d]) : ""}" placeholder="0" ${isLocked ? "disabled" : ""} /></td>
             </tr>`).join("")}
         </tbody>
       </table>
       <div class="row-actions">
-        <button id="cashSave" class="btn">枚数を保存</button>
+        <button id="cashSave" class="btn" ${isLocked ? "disabled" : ""}>枚数を保存</button>
         <span class="view-sub">月初計: <b>${yen(cashTotal(cash.opening))}</b> ／ 月末計: <b>${yen(cashTotal(cash.closing))}</b></span>
       </div>
     </div>
 
-    ${withdrawalsPanel(cash)}
+    ${withdrawalsPanel(cash, isLocked)}
 
     ${checkPanel(month, products, prices, salesByDay, cash)}
 
@@ -341,22 +367,26 @@ export async function show() {
 
     ${denomTablePanel(cash, salesByDay)}`;
 
-  el().querySelector("#cashSave").addEventListener("click", saveCash);
-  el().querySelector("#cashFillPrev").addEventListener("click", fillOpeningFromPrev);
+  if (!isLocked) {
+    el().querySelector("#cashSave").addEventListener("click", saveCash);
+    el().querySelector("#cashFillPrev").addEventListener("click", fillOpeningFromPrev);
+    const wdAddBtn = el().querySelector("#cashWdAdd");
+    if (wdAddBtn) wdAddBtn.addEventListener("click", openWithdrawalModal);
+    el().querySelectorAll("button[data-delwd]").forEach((b) =>
+      b.addEventListener("click", () => deleteWithdrawal(b.dataset.delwd)));
+
+    // 金種の月初/月末欄を 矢印キー / Enter で移動（行優先: 左→右、上→下）
+    const gridInputs = [];
+    el().querySelectorAll(".cash-denoms tbody tr").forEach((tr) => {
+      gridInputs.push(...tr.querySelectorAll("input"));
+    });
+    bindGridNav(gridInputs, 2);
+  }
+
   el().querySelector("#cashPrices").addEventListener("click", () => openPricesModal(notes));
-  el().querySelector("#cashWdAdd").addEventListener("click", openWithdrawalModal);
-  el().querySelectorAll("button[data-delwd]").forEach((b) =>
-    b.addEventListener("click", () => deleteWithdrawal(b.dataset.delwd)));
   const csvBtn = el().querySelector("#cashCsv");
   if (csvBtn) csvBtn.addEventListener("click", () => {
     const table = buildDailyDenomTable(app.ym, cash.opening, cash.closing, salesByDay, cash.withdrawals);
     downloadCsv(buildCashReportCsv(table), `cash_report_${app.ym}.csv`);
   });
-
-  // 金種の月初/月末欄を 矢印キー / Enter で移動（行優先: 左→右、上→下）
-  const gridInputs = [];
-  el().querySelectorAll(".cash-denoms tbody tr").forEach((tr) => {
-    gridInputs.push(...tr.querySelectorAll("input"));
-  });
-  bindGridNav(gridInputs, 2);
 }

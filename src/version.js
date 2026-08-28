@@ -1,2 +1,3 @@
 // システム全体のバージョン定義
-export const APP_VERSION = "v22";
+export const APP_VERSION = "v23";
+

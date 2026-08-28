@@ -9,14 +9,91 @@ import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
+import { triggerBackupDownload } from "./backup.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
 let detailKey = null;    // 日別台帳を表示する商品key
 const el = () => document.getElementById("view-closing");
 
+function openBackupPromptModal(ym, onDownload) {
+  const shell = document.createElement("div");
+  shell.className = "rv-overlay";
+  shell.innerHTML = `
+    <div class="rv-modal" style="width:min(520px,100%)">
+      <div class="rv-head">
+        <span class="rv-title">月締め確定完了 🔒</span>
+        <button class="rv-close" title="閉じる">✕</button>
+      </div>
+      <div class="rv-body backup-modal-content">
+        <div class="backup-modal-icon">💾</div>
+        <h3 class="backup-modal-title">${formatYm(ym)} の月締めを確定しました</h3>
+        <p class="backup-modal-desc">
+          月締めデータが確定（ロック）され、誤操作から保護されました。<br>
+          続けて、最新の全データをバックアップファイル（JSON）としてダウンロードして保存しますか？
+        </p>
+        <div class="backup-modal-actions">
+          <button id="bkModalDownload" class="btn">💾 バックアップをダウンロード</button>
+          <button id="bkModalClose" class="btn-sub">あとで（閉じる）</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(shell);
+  const close = () => shell.remove();
+  shell.querySelector(".rv-close").onclick = close;
+  shell.querySelector("#bkModalClose").onclick = close;
+  shell.querySelector("#bkModalDownload").onclick = async () => {
+    await onDownload();
+    close();
+  };
+  shell.addEventListener("click", (e) => { if (e.target === shell) close(); });
+}
+
+async function lockMonth() {
+  const month = await ensureMonth(app.ym);
+  if (month.physicalCount === null) {
+    alert("月締めを確定する前に、実棚数を入力・保存してください。");
+    return;
+  }
+  if (!window.confirm(
+    `${formatYm(app.ym)} の月締めを確定（ロック）しますか？\n\n` +
+    `確定すると、誤操作防止のため各データの編集や交換票の追加読み取りができなくなります。\n` +
+    `（※必要に応じて、いつでもロック解除できます）`
+  )) return;
+
+  month.locked = true;
+  month.lockedAt = new Date().toISOString();
+  await putMonth(month);
+  toast(`${formatYm(app.ym)} の月締めを確定（ロック）しました ✓`);
+  await show();
+
+  // バックアップダウンロードの選択肢モーダルを表示
+  openBackupPromptModal(app.ym, async () => {
+    try {
+      await triggerBackupDownload();
+      toast("バックアップファイルをダウンロードしました ✓");
+    } catch (err) {
+      alert("バックアップのダウンロードに失敗しました: " + err.message);
+    }
+  });
+}
+
+async function unlockMonth() {
+  const month = await ensureMonth(app.ym);
+  if (!window.confirm(
+    `月締めロックを解除しますか？\n\n` +
+    `解除すると、各入力欄の編集や交換票の追加読み取りが再び可能になります。`
+  )) return;
+
+  month.locked = false;
+  await putMonth(month);
+  toast("月締めロックを解除しました");
+  await show();
+}
+
 async function savePhysical() {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定済みのため編集できません。"); return; }
   const data = {};
   el().querySelectorAll("input[data-phys]").forEach((inp) => {
     data[inp.dataset.phys] = toInt(inp.value);
@@ -36,6 +113,7 @@ async function savePhysical() {
 // 差異を調整記録で解消する。不足 → 交換ページを自動生成、余剰 → 指定日の入庫に加算。
 async function applyAdjustment() {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定済みのため編集できません。"); return; }
   const master = await getMaster(month.masterVersion);
   const products = master.products;
   if (!month.physicalCount) { alert("先に実棚数を入力・保存してください。"); return; }
@@ -62,6 +140,7 @@ async function applyAdjustment() {
 
 async function deletePage(name) {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定済みのため削除できません。"); return; }
   if (!window.confirm(`保存済みページ「${name}」を削除しますか？\n（集計から除外されます。再スキャンすれば入れ直せます）`)) return;
   month.pages = month.pages.filter((p) => p.name !== name);
   await putMonth(month);
@@ -72,6 +151,7 @@ function stocktakeRows(products, ledger, month) {
   const co = month.carryover || {};
   const phys = month.physicalCount || {};
   const isNote = (p) => p.key.startsWith("notes_");
+  const isLocked = !!month.locked;
   return products.map((p) => {
     const rows = ledger.rows[p.key];
     const sum = (f) => rows.reduce((a, r) => a + r[f], 0);
@@ -92,7 +172,7 @@ function stocktakeRows(products, ledger, month) {
         <td class="num">${isNote(p) ? sum("point") : "－"}</td>
         <td class="num"><b>${book}</b></td>
         <td><input type="number" inputmode="numeric" min="0" data-phys="${p.key}"
-             value="${month.physicalCount ? toInt(phys[p.key]) : ""}" placeholder="実棚" /></td>
+             value="${month.physicalCount ? toInt(phys[p.key]) : ""}" placeholder="実棚" ${isLocked ? "disabled" : ""} /></td>
         <td class="num">${diffHtml}</td>
       </tr>`;
   }).join("");
@@ -131,20 +211,24 @@ function adjustPanel(month, products) {
   const nSurp = Object.keys(surpluses).length;
   if (!nShort && !nSurp) return "";
   const maxDays = daysInMonth(month.ym);
+  const isLocked = !!month.locked;
   const surpNote = nSurp
     ? `<p class="view-sub">余剰（実棚が帳簿より多い）商品が ${nSurp} 件あります。これらは帳簿に載せず、そのまま保管します（調整しません）。</p>`
     : "";
-  const shortBlock = nShort ? `
-      <p class="view-sub">帳簿在庫が実棚数より多い分だけ交換記録（通常の交換票と同じ形式）を作成し、帳簿を実棚に合わせます。集計・CSV・Excel上は通常の記録と区別されません。</p>
-      <div class="row-actions">
-        <label>記録する日付
-          <select id="adjDay">
-            ${Array.from({ length: maxDays }, (_, i) => i + 1).map((d) =>
-              `<option value="${d}" ${d === maxDays ? "selected" : ""}>${d}日</option>`).join("")}
-          </select>
-        </label>
-        <button id="adjApply" class="btn">不足分の交換記録を作成する</button>
-      </div>` : "";
+  const shortBlock = nShort ? (
+    isLocked
+      ? `<p class="view-sub">帳簿在庫と実棚数の差異（不足 ${nShort} 件）は調整済みまたは保管中です（月締めロック中）。</p>`
+      : `<p class="view-sub">帳簿在庫が実棚数より多い分だけ交換記録（通常の交換票と同じ形式）を作成し、帳簿を実棚に合わせます。集計・CSV・Excel上は通常の記録と区別されません。</p>
+        <div class="row-actions">
+          <label>記録する日付
+            <select id="adjDay">
+              ${Array.from({ length: maxDays }, (_, i) => i + 1).map((d) =>
+                `<option value="${d}" ${d === maxDays ? "selected" : ""}>${d}日</option>`).join("")}
+            </select>
+          </label>
+          <button id="adjApply" class="btn">不足分の交換記録を作成する</button>
+        </div>`
+  ) : "";
   return `
     <div class="panel warn-panel">
       <h3>差異の調整</h3>
@@ -209,6 +293,7 @@ function pagesPanel(month, products) {
   if (!showPages) {
     return `<button id="clTogglePages" class="btn-sub">保存済みページ一覧を表示（${month.pages.length}枚）</button>`;
   }
+  const isLocked = !!month.locked;
   const sorted = [...month.pages].sort((a, b) => {
     const da = toInt(a.predictions.date_1) * 10 + toInt(a.predictions.date_0);
     const db_ = toInt(b.predictions.date_1) * 10 + toInt(b.predictions.date_0);
@@ -225,7 +310,7 @@ function pagesPanel(month, products) {
             <td>${toInt(p.predictions.date_1) * 10 + toInt(p.predictions.date_0)}日</td>
             <td class="num">${computeTotalScore(p.predictions, products)}点</td>
             <td>${(p.savedAt || "").slice(0, 16).replace("T", " ")}</td>
-            <td><button class="btn-sub" data-delpage="${p.name.replace(/"/g, "&quot;")}">削除</button></td>
+            <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-delpage="${p.name.replace(/"/g, "&quot;")}">削除</button>`}</td>
           </tr>`).join("") : `<tr><td colspan="5">保存済みページはありません。</td></tr>`}
       </tbody>
     </table>`;
@@ -239,14 +324,39 @@ export async function show() {
   const products = master.products;
   const ledger = computeLedger(month, products);
   const avgInfo = await collectAverageConsumption(app.ym);
-  const y = app.ym.slice(0, 4), m = parseInt(app.ym.slice(4), 10);
+  const isLocked = !!month.locked;
 
   const warns = [];
   if (month.carryover === null) warns.push(`繰越在庫が未入力です（<a href="#carryover">繰越在庫</a>で入力）。帳簿残は繰越0として計算されています。`);
   if (!month.pages.length) warns.push(`読み取り済みの交換票がありません（<a href="#reader">読み取り</a>で保存）。`);
 
+  const lockBannerHtml = isLocked ? `
+    <div class="lock-banner">
+      <div class="lock-banner-info">
+        <span class="lock-icon">🔒</span>
+        <div>
+          <div class="lock-title">この月（${formatYm(app.ym)}）は月締め確定（ロック中）です</div>
+          <div class="lock-meta">確定日時: ${new Date(month.lockedAt || Date.now()).toLocaleString("ja-JP")} ／ 誤操作防止のため編集不可</div>
+        </div>
+      </div>
+      <button id="clUnlock" class="btn-unlock">🔓 ロックを解除して再編集</button>
+    </div>` : "";
+
+  const actionsHtml = isLocked ? `
+    <div class="row-actions">
+      <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
+      <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
+    </div>` : `
+    <div class="row-actions">
+      <button id="clSavePhys" class="btn">実棚数を保存</button>
+      ${month.physicalCount !== null ? `<button id="clLock" class="btn btn-lock">🔒 月締めを確定してロック</button>` : ""}
+      <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
+      <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
+    </div>`;
+
   el().innerHTML = `
-    <h2 class="view-title">月締め・棚卸（${formatYm(app.ym)}）</h2>
+    <h2 class="view-title">月締め・棚卸（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    ${lockBannerHtml}
     ${warns.length ? `<div class="panel warn-panel">${warns.map((w) => `<div>⚠ ${w}</div>`).join("")}</div>` : ""}
     <div class="panel">
       <h3>棚卸表</h3>
@@ -257,11 +367,7 @@ export async function show() {
           <tbody>${stocktakeRows(products, ledger, month)}</tbody>
         </table>
       </div>
-      <div class="row-actions">
-        <button id="clSavePhys" class="btn">実棚数を保存</button>
-        <button id="clReport" class="btn btn-secondary">Excelレポート（report_${app.ym}.xlsx）</button>
-        <button id="clPreview" class="btn-sub">レポートをブラウザで見る</button>
-      </div>
+      ${actionsHtml}
     </div>
     ${adjustPanel(month, products)}
     ${reorderPanel(month, products, ledger, avgInfo)}
@@ -271,7 +377,13 @@ export async function show() {
       ${pagesPanel(month, products)}
     </div>`;
 
-  el().querySelector("#clSavePhys").addEventListener("click", savePhysical);
+  const saveBtn = el().querySelector("#clSavePhys");
+  if (saveBtn) saveBtn.addEventListener("click", savePhysical);
+  const lockBtn = el().querySelector("#clLock");
+  if (lockBtn) lockBtn.addEventListener("click", lockMonth);
+  const unlockBtn = el().querySelector("#clUnlock");
+  if (unlockBtn) unlockBtn.addEventListener("click", unlockMonth);
+
   el().querySelector("#clReport").addEventListener("click", async (e) => {
     e.target.disabled = true;
     try {
@@ -296,6 +408,8 @@ export async function show() {
       await show();
     }));
 
-  // 実棚数の入力欄を Enter / 矢印キーで移動できるようにする
-  bindGridNav([...el().querySelectorAll("input[data-phys]")], 1);
+  if (!isLocked) {
+    // 実棚数の入力欄を Enter / 矢印キーで移動できるようにする
+    bindGridNav([...el().querySelectorAll("input[data-phys]")], 1);
+  }
 }

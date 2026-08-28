@@ -15,6 +15,8 @@ const el = () => document.getElementById("view-specials");
 const methodName = (id) => (SPECIAL_METHODS.find((m) => m.id === id) || {}).name || id;
 
 async function addEntry() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため追加できません。"); return; }
   const day = toInt(el().querySelector("#spDay").value);
   const method = el().querySelector("input[name=spMethod]:checked").value;
   const qty = {};
@@ -28,7 +30,6 @@ async function addEntry() {
 
   lastDay = day;
   lastMethod = method;
-  const month = await ensureMonth(app.ym);
   month.specials.push({
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     day, method, qty,
@@ -38,11 +39,12 @@ async function addEntry() {
   toast(`${day}日の${methodName(method)}でのノート購入を記録しました ✓`);
   await show();
   const firstInput = el().querySelector(".sp-notes input[data-key]");
-  if (firstInput) firstInput.focus();
+  if (firstInput && !month.locked) firstInput.focus();
 }
 
 async function deleteEntry(id) {
   const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため削除できません。"); return; }
   const item = month.specials.find((s) => s.id === id);
   if (!item) return;
   if (!window.confirm(`${item.day}日の${methodName(item.method)}購入の記録を削除しますか？`)) return;
@@ -59,6 +61,7 @@ export async function show() {
   const notes = noteProducts(master.products);
   const maxDays = daysInMonth(app.ym);
   const items = [...(month.specials || [])].sort((a, b) => a.day - b.day);
+  const isLocked = !!month.locked;
 
   const qtyText = (s) =>
     notes.filter((p) => toInt(s.qty[p.key]) > 0)
@@ -68,29 +71,41 @@ export async function show() {
   const selDay = lastDay && lastDay <= maxDays ? lastDay : 1;
   const selMethod = lastMethod || SPECIAL_METHODS[0].id;
 
+  const lockBannerHtml = isLocked ? `
+    <div class="lock-banner">
+      <div class="lock-banner-info">
+        <span class="lock-icon">🔒</span>
+        <div>
+          <div class="lock-title">この月（${formatYm(app.ym)}）は月締め確定（ロック中）です</div>
+          <div class="lock-meta">誤操作防止のため編集できません。「月締め」画面からロックを解除できます。</div>
+        </div>
+      </div>
+    </div>` : "";
+
   el().innerHTML = `
-    <h2 class="view-title">ノート購入（${formatYm(app.ym)}）</h2>
+    <h2 class="view-title">ノート購入（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}</h2>
+    ${lockBannerHtml}
     <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
     <div class="panel">
       <h3>記録を追加</h3>
       <div class="sp-form">
         <label>日付
-          <select id="spDay">
+          <select id="spDay" ${isLocked ? "disabled" : ""}>
             ${Array.from({ length: maxDays }, (_, i) => i + 1).map((d) =>
               `<option value="${d}" ${d === selDay ? "selected" : ""}>${d}日</option>`).join("")}
           </select>
         </label>
         <div class="sp-methods">
           ${SPECIAL_METHODS.map((m) => `
-            <label class="sp-radio"><input type="radio" name="spMethod" value="${m.id}" ${m.id === selMethod ? "checked" : ""}/> ${m.name}</label>`).join("")}
+            <label class="sp-radio"><input type="radio" name="spMethod" value="${m.id}" ${m.id === selMethod ? "checked" : ""} ${isLocked ? "disabled" : ""}/> ${m.name}</label>`).join("")}
         </div>
         <div class="sp-notes">
           ${notes.map((p) => `
             <label class="sp-note">${p.name}
-              <input type="number" inputmode="numeric" min="0" data-key="${p.key}" placeholder="0" />
+              <input type="number" inputmode="numeric" min="0" data-key="${p.key}" placeholder="0" ${isLocked ? "disabled" : ""} />
             </label>`).join("")}
         </div>
-        <div class="sp-add-wrap"><button id="spAdd" class="btn">追加</button></div>
+        <div class="sp-add-wrap"><button id="spAdd" class="btn" ${isLocked ? "disabled" : ""}>追加</button></div>
       </div>
     </div>
     <div class="panel">
@@ -103,21 +118,23 @@ export async function show() {
               <td>${s.day}日</td>
               <td>${methodName(s.method)}</td>
               <td>${qtyText(s)}</td>
-              <td><button class="btn-sub" data-del="${s.id}">削除</button></td>
+              <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-del="${s.id}">削除</button>`}</td>
             </tr>`).join("") : `<tr><td colspan="4">まだ記録がありません。</td></tr>`}
         </tbody>
       </table>
     </div>`;
 
-  el().querySelector("#spAdd").addEventListener("click", addEntry);
-  el().querySelectorAll("button[data-del]").forEach((b) =>
-    b.addEventListener("click", () => deleteEntry(b.dataset.del)));
+  if (!isLocked) {
+    el().querySelector("#spAdd").addEventListener("click", addEntry);
+    el().querySelectorAll("button[data-del]").forEach((b) =>
+      b.addEventListener("click", () => deleteEntry(b.dataset.del)));
 
-  // 縦1列のノート入力欄を Enter / 矢印キーで移動。最後の欄で Enter すると追加ボタンへ
-  const noteInputs = [...el().querySelectorAll(".sp-notes input[data-key]")];
-  bindGridNav(noteInputs, 1);
-  const last = noteInputs[noteInputs.length - 1];
-  if (last) last.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); el().querySelector("#spAdd").focus(); }
-  });
+    // 縦1列のノート入力欄を Enter / 矢印キーで移動。最後の欄で Enter すると追加ボタンへ
+    const noteInputs = [...el().querySelectorAll(".sp-notes input[data-key]")];
+    bindGridNav(noteInputs, 1);
+    const last = noteInputs[noteInputs.length - 1];
+    if (last) last.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); el().querySelector("#spAdd").focus(); }
+    });
+  }
 }
