@@ -414,13 +414,74 @@ select { padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6
   display: block; background: linear-gradient(135deg, #0ea5e9, #0369a1);
   color: #fff; border-radius: 14px; padding: 1.1rem 1.4rem; margin: .5rem 0 1.1rem;
   text-decoration: none; box-shadow: 0 4px 14px rgba(14,165,233,.35);
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
 }
-.home-next:hover { filter: brightness(1.06); }
+.home-next:hover { filter: brightness(1.04); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(14,165,233,.4); }
 .home-next .hn-label { font-size: .85rem; opacity: .9; font-weight: 600; }
 .home-next .hn-title { font-size: 1.6rem; font-weight: 800; margin: .15rem 0; }
 .home-next .hn-desc { font-size: .88rem; opacity: .92; margin: 0; }
 .home-next.warn { background: linear-gradient(135deg, #dc2626, #991b1b); box-shadow: 0 4px 14px rgba(220,38,38,.35); }
+.home-next.warn:hover { box-shadow: 0 6px 18px rgba(220,38,38,.4); }
 .home-next.done { background: linear-gradient(135deg, #059669, #047857); box-shadow: 0 4px 14px rgba(5,150,105,.35); }
+.home-next.done:hover { box-shadow: 0 6px 18px rgba(5,150,105,.4); }
+
+.home-next .hn-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+  margin-top: .9rem;
+}
+.home-next .hn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem 1.15rem;
+  font-size: .92rem;
+  font-weight: 700;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .15s ease;
+}
+.home-next .hn-btn-primary {
+  background: #ffffff;
+  color: #0369a1;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.home-next .hn-btn-primary:hover {
+  background: #f0f9ff;
+  color: #0284c7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+.home-next.warn .hn-btn-primary {
+  color: #991b1b;
+}
+.home-next.warn .hn-btn-primary:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.home-next.done .hn-btn-primary {
+  color: #047857;
+}
+.home-next.done .hn-btn-primary:hover {
+  background: #ecfdf5;
+  color: #059669;
+}
+.home-next .hn-btn-skip {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(4px);
+}
+.home-next .hn-btn-skip:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: translateY(-1px);
+}
 
 /* ---- 入庫の記録（動的グリッド & 2カラムレイアウト） ---- */
 .ar-container {

@@ -1,9 +1,10 @@
-import { ensureMonth, getMaster } from "../db.js";
+import { ensureMonth, getMaster, putMonth } from "../db.js";
 import { downloadReport } from "../excelReport.js";
 import { openReportPreview } from "../reportPreview.js";
 import { APP_VERSION } from "../version.js";
 import { formatYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
+import { toast } from "../toast.js";
 
 let app = null;
 const el = () => document.getElementById("view-home");
@@ -37,6 +38,7 @@ function nextAction(month) {
     return {
       view: "closing", cls: "done", title: "月締め確定済み（ロック中） 🔒",
       desc: "この月の月締め作業は完了し、データはロックされています。Excelレポートのダウンロードやバックアップの保存が可能です。",
+      btnLabel: "月締め画面を見る →",
     };
   }
   const p = month.readerPending;
@@ -45,25 +47,65 @@ function nextAction(month) {
     return {
       view: "reader", cls: "warn", title: "読み取りの要対応を解消する",
       desc: `未解決の読み取りが ${pendingN} 件あります（マーカー失敗 ${p.fail || 0}・検算/日付NG ${p.ng || 0}・低信頼度 ${p.low || 0}）。該当の交換票をもう一度読み取り、修正・確定してください。`,
+      btnLabel: "要対応を確認する →",
     };
   }
   if (month.carryover === null)
-    return { view: "carryover", cls: "", title: "繰越在庫を入力する", desc: "月初時点の在庫数を入力します。前月の帳簿残から自動入力できます。" };
-  if (!month.pages.length)
-    return { view: "reader", cls: "", title: "交換票を読み取る", desc: "交換票のスキャンPDFをAIで読み取り、確認して保存します。月内は何回かに分けてOK。" };
-  // 現金のつじつまチェックはノート購入の記録を使うため、現金入力より先に案内する
-  if (!(month.cash && month.cash.closing) && !(month.specials || []).length)
     return {
-      view: "specials", cls: "", title: "ノート購入を記録する",
-      desc: "現金・口座振替・栄冠ポイントでのノート購入を記録します。現金管理のつじつまチェックはこの記録を使うので、月末の現金入力より先に済ませてください（この月の購入がなければ、そのまま「5. 現金管理」へ進んでOK。グッズが届いた月は「3. 入庫」の記録もお忘れなく）。",
+      view: "carryover", cls: "", title: "繰越在庫を入力する",
+      desc: "月初時点の在庫数を入力します。前月の帳簿残から自動入力できます。",
+      btnLabel: "繰越在庫を入力する →",
     };
+  if (!month.pages.length && !month.readerSkipped)
+    return {
+      view: "reader", cls: "", title: "交換票を読み取る",
+      desc: "交換票のスキャンPDFをAIで読み取り、確認して保存します。月内は何回かに分けてOK。",
+      btnLabel: "交換票を読み取る →",
+    };
+
+  // 入庫の記録
+  const arrivalDays = Object.keys(month.arrivals || {}).length;
+  const arrivalsHandled = arrivalDays > 0 || !!month.arrivalsSkipped;
+  if (!arrivalsHandled) {
+    return {
+      view: "arrivals", cls: "",
+      title: "入庫を記録する",
+      desc: "今月届いたグッズ（納品・仕入）がある場合は日付と個数を記録します。",
+      btnLabel: "入庫を入力する →",
+    };
+  }
+
+  // ノート購入の記録
+  const specialsCount = (month.specials || []).length;
+  const specialsHandled = specialsCount > 0 || !!month.specialsSkipped;
+  if (!specialsHandled) {
+    return {
+      view: "specials", cls: "",
+      title: "ノート購入を記録する",
+      desc: "現金・口座振替・栄冠ポイントでのノート購入を記録します。現金管理のつじつまチェックはこの記録を使うので、月末の現金入力より先に済ませてください。",
+      btnLabel: "ノート購入を記録する →",
+    };
+  }
+
   if (!(month.cash && month.cash.closing))
-    return { view: "cash", cls: "", title: "月末の現金を数えて入力する", desc: "金庫の現金を金種別に数えて入力すると、売上とのつじつまを自動チェックします。" };
+    return {
+      view: "cash", cls: "",
+      title: "月末の現金を数えて入力する",
+      desc: "金庫の現金を金種別に数えて入力すると、売上とのつじつまを自動チェックします。",
+      btnLabel: "現金管理を開く →",
+    };
   if (month.physicalCount === null)
-    return { view: "closing", cls: "", title: "実棚数を入力して棚卸する", desc: "実際に棚を数えて入力し、帳簿残との差異を確認します。" };
+    return {
+      view: "closing", cls: "",
+      title: "実棚数を入力して棚卸する",
+      desc: "実際に棚を数えて入力し、帳簿残との差異を確認します。",
+      btnLabel: "実棚数を入力する →",
+    };
   return {
-    view: "closing", cls: "warn", title: "月締めを確定（ロック）する 🔒",
+    view: "closing", cls: "warn",
+    title: "月締めを確定（ロック）する 🔒",
     desc: "実棚数の保存が完了しています。Excelレポートを確認後、「月締め」画面から締め確定（ロック）を行ってください。",
+    btnLabel: "月締め確定画面へ →",
   };
 }
 
@@ -74,9 +116,14 @@ export async function show() {
   const isLocked = !!month.locked;
 
   const pagesN = month.pages.length;
+  const isReaderSkipped = !!month.readerSkipped;
   const carryoverDone = month.carryover !== null;
   const arrivalDays = Object.keys(month.arrivals || {}).length;
+  const isArrivalsSkipped = !!month.arrivalsSkipped;
+  const arrivalsDone = arrivalDays > 0 || isArrivalsSkipped;
   const specialsN = (month.specials || []).length;
+  const isSpecialsSkipped = !!month.specialsSkipped;
+  const specialsDone = specialsN > 0 || isSpecialsSkipped;
   const cashDone = !!(month.cash && month.cash.closing);
   const physDone = month.physicalCount !== null;
   const p = month.readerPending;
@@ -85,7 +132,15 @@ export async function show() {
 
   const readerStatus = pendingN
     ? `<span class="err">要対応 ${pendingN} 件</span>`
-    : (pagesN ? `保存済み ${pagesN} 枚` : "未読み取り");
+    : (pagesN ? `保存済み ${pagesN} 枚` : (isReaderSkipped ? "交換票なし（スキップ済） ✓" : "未読み取り"));
+
+  const arrivalsStatus = arrivalDays
+    ? `${arrivalDays} 日分入力`
+    : (isArrivalsSkipped ? "入庫なし（スキップ済） ✓" : "未入力");
+
+  const specialsStatus = specialsN
+    ? `${specialsN} 件`
+    : (isSpecialsSkipped ? "購入なし（スキップ済） ✓" : "未入力");
 
   const closingStatus = isLocked
     ? "締め確定（ロック中） 🔒"
@@ -103,6 +158,9 @@ export async function show() {
       </div>
       <div class="hn-title">${na.title}</div>
       <p class="hn-desc">${na.desc}</p>
+      <div class="hn-btn-group">
+        <span class="hn-btn hn-btn-primary">${na.btnLabel || "進む →"}</span>
+      </div>
     </a>
     ${physDone && master ? `
     <div class="row-actions">
@@ -115,11 +173,11 @@ export async function show() {
       ${card("carryover", "1. 繰越在庫", carryoverDone ? "入力済み ✓" : "未入力",
         carryoverDone, "月初時点の在庫数。前月の帳簿残から自動入力できます。")}
       ${card("reader", "2. 交換票の読み取り", readerStatus,
-        pagesN > 0 && !pendingN, "交換票のスキャンPDFをAIで読み取り、確認・訂正して保存します。月内は何回かに分けてOK。")}
-      ${card("arrivals", "3. 入庫の記録", arrivalDays ? `${arrivalDays} 日分入力` : "入庫なし/未入力",
-        arrivalDays > 0, "グッズが届いたら日付ごとに個数を記録します。")}
-      ${card("specials", "4. ノート購入", specialsN ? `${specialsN} 件` : "0 件",
-        specialsN > 0, "現金・口座振替・栄冠ポイントでのノート購入を手入力します。")}
+        (pagesN > 0 && !pendingN) || isReaderSkipped, "交換票のスキャンPDFをAIで読み取り、確認・訂正して保存します。月内は何回かに分けてOK。")}
+      ${card("arrivals", "3. 入庫の記録", arrivalsStatus,
+        arrivalsDone, "グッズが届いたら日付ごとに個数を記録します。")}
+      ${card("specials", "4. ノート購入", specialsStatus,
+        specialsDone, "現金・口座振替・栄冠ポイントでのノート購入を手入力します。")}
       ${card("cash", "5. 現金管理", cashDone ? "月末現金入力済み ✓" : "未入力",
         cashDone, "月末に金庫の現金を数えて入力すると、ノートの現金売上とのつじつまを自動チェックします。本部報告用の日別金種表も作れます。")}
       ${card("closing", "6. 月締め（棚卸）", closingStatus,

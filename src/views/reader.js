@@ -203,6 +203,7 @@ async function saveOkPagesToMonth() {
       byName.set(p.name, { name: p.name, predictions: p.predictions, savedAt: new Date().toISOString() });
     }
     month.pages = [...byName.values()];
+    month.readerSkipped = false;
   }
   const fail = pages.filter((p) => !p.ok).length;
   const ng = pages.filter((p) => p.ok && p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false)).length;
@@ -213,6 +214,24 @@ async function saveOkPagesToMonth() {
     : null;
   await putMonth(month);
   await renderSavedInfo();
+}
+
+async function skipReader() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.readerSkipped = true;
+  await putMonth(month);
+  toast("今月の交換票を「交換票なし（スキップ）」に設定しました ✓");
+  app.navigate("arrivals");
+}
+
+async function unskipReader() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.readerSkipped = false;
+  await putMonth(month);
+  toast("交換票のスキップを解除しました");
+  await show();
 }
 
 async function renderSavedInfo() {
@@ -387,6 +406,40 @@ export function init(appRef) {
 // タブ表示時（対象年月の変更時にも呼ばれる）
 export async function show() {
   const month = await ensureMonth(app.ym);
+  const isLocked = !!month.locked;
+  const isSkipped = !!month.readerSkipped;
+  const hasPages = month.pages && month.pages.length > 0;
+
+  const skipBannerEl = $("readerSkipBanner");
+  if (skipBannerEl) {
+    if (!isLocked && isSkipped && !hasPages) {
+      skipBannerEl.innerHTML = `
+        <div class="panel" style="margin: 0 0 .75rem; background: #ecfdf5; border-color: #a7f3d0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem;">
+            <span style="color: #065f46; font-size: .9rem;">
+              ✓ <b>この月は「交換票なし（スキップ）」として確認済みです。</b>（交換票を読み取ると自動的に確定保存状態になります）
+            </span>
+            <button id="readerUnskipBtn" class="btn-sub" style="font-size: .85rem; padding: .25rem .6rem;" type="button">スキップを解除する</button>
+          </div>
+        </div>`;
+      const unskipBtn = skipBannerEl.querySelector("#readerUnskipBtn");
+      if (unskipBtn) unskipBtn.addEventListener("click", unskipReader);
+    } else {
+      skipBannerEl.innerHTML = "";
+    }
+  }
+
+  const skipAreaEl = $("readerSkipArea");
+  if (skipAreaEl) {
+    if (!isLocked && !hasPages && !isSkipped) {
+      skipAreaEl.innerHTML = `<button id="readerQuickSkipBtn" class="btn-sub" style="font-size: .88rem; border-color: #94a3b8;" type="button">※今月は交換票なし（スキップして入庫へ） →</button>`;
+      const quickSkipBtn = skipAreaEl.querySelector("#readerQuickSkipBtn");
+      if (quickSkipBtn) quickSkipBtn.addEventListener("click", skipReader);
+    } else {
+      skipAreaEl.innerHTML = "";
+    }
+  }
+
   if (app.engine) {
     if (month.locked) {
       setStatus(`🔒 この月（${formatYm(app.ym)}）は月締め確定（ロック中）のため読み取りできません。（月締めタブでロック解除可能）`);

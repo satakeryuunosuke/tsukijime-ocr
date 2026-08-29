@@ -36,11 +36,30 @@ async function addEntry() {
     day, method, qty,
     createdAt: new Date().toISOString(),
   });
+  month.specialsSkipped = false;
   await putMonth(month);
   toast(`${day}日の${methodName(method)}でのノート購入を記録しました ✓`);
   await show();
   const firstInput = el().querySelector(".sp-notes input[data-key]");
   if (firstInput && !month.locked) firstInput.focus();
+}
+
+async function skipSpecials() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.specialsSkipped = true;
+  await putMonth(month);
+  toast("今月のノート購入を「購入なし（スキップ）」に設定しました ✓");
+  app.navigate("cash");
+}
+
+async function unskipSpecials() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.specialsSkipped = false;
+  await putMonth(month);
+  toast("ノート購入のスキップを解除しました");
+  await show();
 }
 
 async function deleteEntry(id) {
@@ -63,6 +82,7 @@ export async function show() {
   const maxDays = daysInMonth(app.ym);
   const items = [...(month.specials || [])].sort((a, b) => a.day - b.day);
   const isLocked = !!month.locked;
+  const isSkipped = !!month.specialsSkipped;
 
   const qtyText = (s) =>
     notes.filter((p) => toInt(s.qty[p.key]) > 0)
@@ -83,13 +103,29 @@ export async function show() {
       </div>
     </div>` : "";
 
+  const skippedBannerHtml = (!isLocked && isSkipped && items.length === 0) ? `
+    <div class="panel" style="margin: .5rem 0; background: #ecfdf5; border-color: #a7f3d0;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem;">
+        <span style="color: #065f46; font-size: .9rem;">
+          ✓ <b>この月は「ノート購入なし（スキップ）」として確認済みです。</b>（購入記録を追加すると自動的に登録状態に更新されます）
+        </span>
+        <button id="spUnskipBtn" class="btn-sub" style="font-size: .85rem; padding: .25rem .6rem;" type="button">スキップを解除する</button>
+      </div>
+    </div>` : "";
+
   el().innerHTML = `
     <h2 class="view-title">
       ノート購入（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
       ${helpBtn("specials_overview", { size: "lg", title: "ノート購入記録の概要と役割" })}
     </h2>
     ${lockBannerHtml}
-    <p class="view-sub">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
+    ${skippedBannerHtml}
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem;">
+      <p class="view-sub" style="margin: 0;">現金・口座振替・栄冠ポイントでのノート購入を記録</p>
+      ${(!isLocked && items.length === 0 && !isSkipped) ? `
+        <button id="spQuickSkipBtn" class="btn-sub" style="font-size: .88rem; border-color: #94a3b8;" type="button">※今月はノート購入なし（スキップして現金管理へ） →</button>
+      ` : ""}
+    </div>
     <div class="panel">
       <h3>
         記録を追加
@@ -135,6 +171,12 @@ export async function show() {
     el().querySelector("#spAdd").addEventListener("click", addEntry);
     el().querySelectorAll("button[data-del]").forEach((b) =>
       b.addEventListener("click", () => deleteEntry(b.dataset.del)));
+
+    const quickSkipBtn = el().querySelector("#spQuickSkipBtn");
+    if (quickSkipBtn) quickSkipBtn.addEventListener("click", skipSpecials);
+
+    const unskipBtn = el().querySelector("#spUnskipBtn");
+    if (unskipBtn) unskipBtn.addEventListener("click", unskipSpecials);
 
     // 縦1列のノート入力欄を Enter / 矢印キーで移動。最後の欄で Enter すると追加ボタンへ
     const noteInputs = [...el().querySelectorAll(".sp-notes input[data-key]")];

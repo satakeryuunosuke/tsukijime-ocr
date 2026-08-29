@@ -51,6 +51,7 @@
       <div class="view-head-wrap" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.75rem">
         <h2 class="view-title" style="margin:0">交換票の読み取り（AI-OCR） <button type="button" class="help-btn help-btn-lg" data-help="reader_overview" title="読み取り全体の流れ・取説">?</button></h2>
       </div>
+      <div id="readerSkipBanner"></div>
       <section id="dropzone" class="dropzone">
         <p class="dz-title">交換票の PDF または 画像をドラッグ＆ドロップ <button type="button" class="help-btn help-btn-sm" data-help="reader_dropzone" title="ファイル選択・対応形式について">?</button></p>
         <p class="dz-or">または</p>
@@ -60,6 +61,7 @@
         </label>
         <p id="status" class="status">読み込み中…</p>
       </section>
+      <div id="readerSkipArea" style="margin-top: .75rem; text-align: right;"></div>
 
       <div id="progressWrap" class="progress-wrap" hidden>
         <div id="progressBar" class="progress-bar"></div>

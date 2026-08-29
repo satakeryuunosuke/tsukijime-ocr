@@ -72,8 +72,11 @@ export function emptyMonth(ym, masterVersion) {
     masterVersion,
     pages: [],          // [{ name, predictions, savedAt }]
     carryover: null,    // { productKey: qty } 未入力なら null
+    readerSkipped: false, // 交換票なし（スキップ）フラグ
     arrivals: {},       // { day(number): { productKey: qty } }
+    arrivalsSkipped: false, // 入庫なし（スキップ）フラグ
     specials: [],       // [{ id, day, method('cash'|'debit'|'point'), qty: {notes_Y..} }]
+    specialsSkipped: false, // ノート購入なし（スキップ）フラグ
     physicalCount: null,// { productKey: qty } 未入力なら null
     cash: null,         // { opening, closing: {金種:枚数}|null, withdrawals: [{id,day,counts}] } 未入力なら null
     readerPending: null,// { fail, ng, low } 読み取りの要対応件数（ホーム表示用）。無ければ null

@@ -45,8 +45,12 @@ async function saveDay() {
     const v = toInt(inp.value);
     if (v > 0) { data[inp.dataset.key] = v; any = true; }
   });
-  if (any) month.arrivals[selectedDay] = data;
-  else delete month.arrivals[selectedDay];
+  if (any) {
+    month.arrivals[selectedDay] = data;
+    month.arrivalsSkipped = false;
+  } else {
+    delete month.arrivals[selectedDay];
+  }
   await putMonth(month);
   toast(any ? `${selectedDay}日の入庫を保存しました ✓` : `${selectedDay}日の入庫記録を削除しました`);
   await show();
@@ -60,6 +64,24 @@ async function deleteDay(d) {
   delete month.arrivals[d];
   await putMonth(month);
   toast(`${d}日の入庫記録を削除しました`);
+  await show();
+}
+
+async function skipArrivals() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.arrivalsSkipped = true;
+  await putMonth(month);
+  toast("今月の入庫を「入庫なし（スキップ）」に設定しました ✓");
+  app.navigate("specials");
+}
+
+async function unskipArrivals() {
+  const month = await ensureMonth(app.ym);
+  if (month.locked) { alert("月締め確定（ロック中）のため変更できません。"); return; }
+  month.arrivalsSkipped = false;
+  await putMonth(month);
+  toast("入庫のスキップを解除しました");
   await show();
 }
 
@@ -121,6 +143,7 @@ export async function show() {
   const dayTotal = Object.values(dayData).reduce((sum, v) => sum + toInt(v), 0);
 
   const isLocked = !!month.locked;
+  const isSkipped = !!month.arrivalsSkipped;
 
   const lockBannerHtml = isLocked ? `
     <div class="lock-banner">
@@ -133,13 +156,29 @@ export async function show() {
       </div>
     </div>` : "";
 
+  const skippedBannerHtml = (!isLocked && isSkipped && dayList.length === 0) ? `
+    <div class="panel" style="margin: .5rem 0; background: #ecfdf5; border-color: #a7f3d0;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem;">
+        <span style="color: #065f46; font-size: .9rem;">
+          ✓ <b>この月は「入庫なし（スキップ）」として確認済みです。</b>（グッズが届いた場合は個数を入力して保存すると登録状態に更新されます）
+        </span>
+        <button id="arUnskipBtn" class="btn-sub" style="font-size: .85rem; padding: .25rem .6rem;" type="button">スキップを解除する</button>
+      </div>
+    </div>` : "";
+
   el().innerHTML = `
     <h2 class="view-title">
       入庫の記録（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
       ${helpBtn("arrivals_overview", { size: "lg", title: "入庫記録の目的と操作方法" })}
     </h2>
     ${lockBannerHtml}
-    <p class="view-sub">グッズが届いた日を選び、届いた個数を入力して保存してください。</p>
+    ${skippedBannerHtml}
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem;">
+      <p class="view-sub" style="margin: 0;">グッズが届いた日を選び、届いた個数を入力して保存してください。</p>
+      ${(!isLocked && dayList.length === 0 && !isSkipped) ? `
+        <button id="arQuickSkipBtn" class="btn-sub" style="font-size: .88rem; border-color: #94a3b8;" type="button">※今月は入庫なし（スキップしてノート購入へ） →</button>
+      ` : ""}
+    </div>
 
     <div class="ar-container">
       <!-- 左側：入庫入力メイン -->
@@ -304,6 +343,12 @@ export async function show() {
 
   el().querySelector("#arSave").addEventListener("click", saveDay);
   el().querySelector("#arClear").addEventListener("click", clearCurrentDayInputs);
+
+  const quickSkipBtn = el().querySelector("#arQuickSkipBtn");
+  if (quickSkipBtn) quickSkipBtn.addEventListener("click", skipArrivals);
+
+  const unskipBtn = el().querySelector("#arUnskipBtn");
+  if (unskipBtn) unskipBtn.addEventListener("click", unskipArrivals);
 
   el().querySelectorAll("button[data-editday]").forEach((b) =>
     b.addEventListener("click", async () => {
