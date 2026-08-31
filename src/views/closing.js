@@ -276,14 +276,14 @@ function reorderPanel(month, products, ledger, avgInfo) {
           <tbody>
             ${toOrder.map((r) => `
               <tr>
-                <td>${r.product.name}</td>
-                <td class="num">${r.current}</td>
+                <td>${r.name}</td>
+                <td class="num">${r.stock}</td>
                 <td class="num">${fmtAvg(r.avg)}</td>
                 <td class="num"><b class="warn">${r.order}</b></td>
               </tr>`).join("")}
           </tbody>
         </table>` : `<p class="view-sub ok">全商品、${STOCK_MONTHS}か月分以上の在庫があります。今月の発注推奨はありません。</p>`}
-      ${noHistory.length ? `<p class="view-sub muted">※ 過去の払出実績がないため計算対象外: ${noHistory.map((r) => r.product.name).join("、")}</p>` : ""}
+      ${noHistory.length ? `<p class="view-sub muted">※ 過去の払出実績がないため計算対象外: ${noHistory.map((r) => r.name).join("、")}</p>` : ""}
     </div>`;
 }
 
