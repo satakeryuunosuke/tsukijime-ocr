@@ -1,6 +1,6 @@
 // Service Worker: アプリシェルと全アセット（OpenCV.js/tfjs/モデル/設定）を
 // プリキャッシュし、オフラインでも完全動作させる。
-const CACHE = "tsukijime-ocr-v27";
+const CACHE = "tsukijime-ocr-v28";
 
 
 const PRECACHE = [
@@ -45,6 +45,10 @@ const PRECACHE = [
   "./src/views/masters.js",
   "./src/views/backup.js",
   "./src/views/settings.js",
+  "./src/aiReport.js",
+  "./src/dateUtils.js",
+  "./src/help.js",
+
   // ライブラリ（同梱）
   "./public/assets/vendor/opencv.js",
   "./public/assets/vendor/tf.min.js",

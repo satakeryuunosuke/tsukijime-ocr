@@ -150,7 +150,18 @@ tools/                変換・検証スクリプト（配布不要）
   `public/assets/model/` を差し替え、`sw.js` の CACHE 名を上げる。
 - 商品・ROI座標の変更は**アプリの「商品・交換票」タブで行う**（新マスタバージョンとして保存）。
   `public/assets/` のCSVは初回シード専用で、シード後の変更は既存端末には反映されない。
-- **デプロイの度に `sw.js` の CACHE バージョンを上げること**（忘れると更新が反映されない）。
+- **デプロイの度にシステムバージョンを上げること**（忘れるとブラウザのキャッシュにより更新が反映されません）。
+  - 自動引き上げツールを実行すると、`src/version.js` の `APP_VERSION` と `sw.js` の `CACHE` 名、およびアセットキャッシュリスト（`PRECACHE`）が自動で同期・インクリメントされます:
+    ```bash
+    python tools/bump_version.py
+    # または Windows で bump_version.bat を実行
+    ```
+  - バージョン指定や整合性チェック:
+    ```bash
+    python tools/bump_version.py v28      # 指定バージョンへ更新
+    python tools/bump_version.py --check  # version.js と sw.js の整合性確認
+    python tools/bump_version.py --dry-run # 変更内容のプレビュー
+    ```
 
 ## 検証状況（Python との一致）
 `tools/` の検証ページで、既存 Python パイプラインと実データ照合済み。
