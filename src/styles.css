@@ -19,7 +19,124 @@ header {
   background: linear-gradient(135deg, #0f172a, #1e3a5f);
   color: #fff; padding: 1.25rem 1.5rem;
 }
-header h1 { margin: 0; font-size: 1.35rem; }
+header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.share-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #e2e8f0;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+  line-height: 1.25;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.share-status-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+.share-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* 接続中（正常） */
+.share-status-btn.status-connected {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #a7f3d0;
+}
+.share-status-btn.status-connected:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(52, 211, 153, 0.7);
+}
+.share-status-btn.status-connected .share-status-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.75);
+}
+
+/* 未接続（未設定） */
+.share-status-btn.status-disconnected {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+.share-status-btn.status-disconnected:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 期限切れ・要再認証 */
+.share-status-btn.status-expired {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+  animation: pulse-border 2s infinite;
+}
+.share-status-btn.status-expired:hover {
+  background: rgba(245, 158, 11, 0.32);
+}
+.share-status-btn.status-expired .share-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.85);
+}
+
+/* タイムアウト・切断・エラー・拒否 */
+.share-status-btn.status-timeout,
+.share-status-btn.status-unreachable,
+.share-status-btn.status-denied,
+.share-status-btn.status-error {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #fecaca;
+  animation: pulse-border-err 2s infinite;
+}
+.share-status-btn.status-timeout:hover,
+.share-status-btn.status-unreachable:hover,
+.share-status-btn.status-denied:hover,
+.share-status-btn.status-error:hover {
+  background: rgba(239, 68, 68, 0.32);
+}
+.share-status-btn.status-timeout .share-status-dot,
+.share-status-btn.status-unreachable .share-status-dot,
+.share-status-btn.status-denied .share-status-dot,
+.share-status-btn.status-error .share-status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.85);
+}
+
+@keyframes pulse-border {
+  0% { border-color: rgba(245, 158, 11, 0.4); }
+  50% { border-color: rgba(245, 158, 11, 0.9); }
+  100% { border-color: rgba(245, 158, 11, 0.4); }
+}
+
+@keyframes pulse-border-err {
+  0% { border-color: rgba(239, 68, 68, 0.4); }
+  50% { border-color: rgba(239, 68, 68, 0.9); }
+  100% { border-color: rgba(239, 68, 68, 0.4); }
+}
+
 header .sub { margin: .35rem 0 0; color: #cbd5e1; font-size: .85rem; }
 .head-row {
   display: flex; justify-content: space-between; align-items: center;

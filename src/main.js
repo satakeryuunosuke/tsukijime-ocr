@@ -15,6 +15,7 @@ import * as specials from "./views/specials.js";
 import * as cash from "./views/cash.js";
 import * as closing from "./views/closing.js";
 import * as settings from "./views/settings.js";
+import { initShareStatusWatcher } from "./views/backup.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
@@ -136,6 +137,9 @@ async function init() {
   // ヘルプ機能（取説・ヒントポップアップ）の初期化
   initGlobalHelpListener();
   initHelpShortcuts(() => app.currentView);
+
+  // 共有ステータス監視の初期化（ヘッダーバッジ・タイムアウト検知）
+  initShareStatusWatcher();
 
   // 各ビューの初期化（イベント紐付け）
   for (const v of Object.values(VIEWS)) {

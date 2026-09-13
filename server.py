@@ -3,7 +3,7 @@ import socketserver
 import os
 import sys
 
-PORT = 8000
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8778
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class Handler(http.server.SimpleHTTPRequestHandler):

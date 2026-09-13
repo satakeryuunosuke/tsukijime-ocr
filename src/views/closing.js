@@ -9,7 +9,7 @@ import { collectAverageConsumption, buildReorderSuggestions, STOCK_MONTHS } from
 import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
-import { triggerBackupDownload } from "./backup.js";
+import { triggerBackupDownload, tryAutoBackup, getBackupFolderInfo, saveBackupToFolder } from "./backup.js";
 import { helpBtn } from "../help.js";
 
 let app = null;
@@ -17,11 +17,12 @@ let showPages = false;   // 保存済みページ一覧の開閉
 let detailKey = null;    // 日別台帳を表示する商品key
 const el = () => document.getElementById("view-closing");
 
-function openBackupPromptModal(ym, onDownload) {
+function openBackupPromptModal(ym, folderInfo, onSave) {
   const shell = document.createElement("div");
   shell.className = "rv-overlay";
+  const hasFolder = folderInfo && folderInfo.handle && folderInfo.name;
   shell.innerHTML = `
-    <div class="rv-modal" style="width:min(520px,100%)">
+    <div class="rv-modal" style="width:min(540px,100%)">
       <div class="rv-head">
         <span class="rv-title">月締め確定完了 🔒</span>
         <button class="rv-close" title="閉じる">✕</button>
@@ -31,10 +32,20 @@ function openBackupPromptModal(ym, onDownload) {
         <h3 class="backup-modal-title">${formatYm(ym)} の月締めを確定しました</h3>
         <p class="backup-modal-desc">
           月締めデータが確定（ロック）され、誤操作から保護されました。<br>
-          続けて、最新の全データをバックアップファイル（JSON）としてダウンロードして保存しますか？
+          最新の全データをバックアップファイル（JSON）として保存しますか？
         </p>
-        <div class="backup-modal-actions">
-          <button id="bkModalDownload" class="btn">💾 バックアップをダウンロード</button>
+        ${hasFolder ? `
+          <div style="margin: 10px 0 14px 0; padding: 10px 14px; background: var(--bg-card, #f8f9fa); border-radius: 6px; border: 1px solid var(--border, #ddd); font-size: 13px; text-align: left;">
+            📁 <b>指定保存先:</b> ${folderInfo.name}
+          </div>
+        ` : ""}
+        <div class="backup-modal-actions" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">
+          ${hasFolder ? `
+            <button id="bkModalFolder" class="btn">📁 指定フォルダに保存</button>
+            <button id="bkModalDownload" class="btn-sub">📥 通常ダウンロード</button>
+          ` : `
+            <button id="bkModalDownload" class="btn">💾 バックアップをダウンロード</button>
+          `}
           <button id="bkModalClose" class="btn-sub">あとで（閉じる）</button>
         </div>
       </div>
@@ -43,8 +54,15 @@ function openBackupPromptModal(ym, onDownload) {
   const close = () => shell.remove();
   shell.querySelector(".rv-close").onclick = close;
   shell.querySelector("#bkModalClose").onclick = close;
+  const folderBtn = shell.querySelector("#bkModalFolder");
+  if (folderBtn) {
+    folderBtn.onclick = async () => {
+      await onSave("folder");
+      close();
+    };
+  }
   shell.querySelector("#bkModalDownload").onclick = async () => {
-    await onDownload();
+    await onSave("download");
     close();
   };
   shell.addEventListener("click", (e) => { if (e.target === shell) close(); });
@@ -68,13 +86,26 @@ async function lockMonth() {
   toast(`${formatYm(app.ym)} の月締めを確定（ロック）しました ✓`);
   await show();
 
-  // バックアップダウンロードの選択肢モーダルを表示
-  openBackupPromptModal(app.ym, async () => {
+  // 自動バックアップ保存先が設定されている場合は自動保存を試行
+  const autoRes = await tryAutoBackup();
+  if (autoRes.success) {
+    toast(`バックアップをフォルダ「${autoRes.folderName}」に自動保存しました ✓ (${autoRes.filename})`);
+    return;
+  }
+
+  // 自動保存が未完了（権限プロンプトが必要、または未設定など）の場合は保存モーダルを表示
+  const folderInfo = await getBackupFolderInfo();
+  openBackupPromptModal(app.ym, folderInfo, async (target) => {
     try {
-      await triggerBackupDownload();
-      toast("バックアップファイルをダウンロードしました ✓");
+      if (target === "folder" && folderInfo.handle) {
+        const res = await saveBackupToFolder(folderInfo.handle);
+        toast(`フォルダ「${res.folderName}」にバックアップを保存しました ✓`);
+      } else {
+        await triggerBackupDownload();
+        toast("バックアップファイルをダウンロードしました ✓");
+      }
     } catch (err) {
-      alert("バックアップのダウンロードに失敗しました: " + err.message);
+      alert("バックアップの保存に失敗しました: " + err.message);
     }
   });
 }

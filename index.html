@@ -13,7 +13,14 @@
   <header>
     <div class="head-row">
       <div>
-        <h1>グッズ交換・月締めシステム <button type="button" class="help-btn help-btn-light" data-help="header_overview" title="システムの全体概要・使い方">?</button></h1>
+        <h1>
+          <span>グッズ交換・月締めシステム</span>
+          <button id="shareStatusBtn" class="share-status-btn status-disconnected" type="button" title="共有ステータスを確認中…">
+            <span class="share-status-dot"></span>
+            <span class="share-status-text">共有: 確認中…</span>
+          </button>
+          <button type="button" class="help-btn help-btn-light" data-help="header_overview" title="システムの全体概要・使い方">?</button>
+        </h1>
         <p class="sub">交換票の読み取りから棚卸・レポート出力までブラウザで完結（オフライン・端末内処理）</p>
       </div>
       <div class="head-actions">

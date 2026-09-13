@@ -156,17 +156,23 @@ export async function putSetting(key, value) {
   return put("settings", { key, value });
 }
 
+export async function deleteSetting(key) {
+  return del("settings", key);
+}
+
 // ---- 一括エクスポート / インポート（バックアップ・引き継ぎ）----
 
 export async function exportAll() {
   const [months, masters, settings] = await Promise.all([
     getAll("months"), getAll("masters"), getAll("settings"),
   ]);
+  // 端末固有の FileSystemDirectoryHandle 等は JSON シリアライズ不可のため除外
+  const safeSettings = settings.filter((s) => s && s.key !== "backupDirHandle");
   return {
     app: "tsukijime",
     format: 1,
     exportedAt: new Date().toISOString(),
-    months, masters, settings,
+    months, masters, settings: safeSettings,
   };
 }
 
@@ -176,12 +182,26 @@ export async function importAll(data) {
     throw new Error("バックアップファイルの形式が正しくありません。");
   }
   const db = await openDb();
+  // 端末固有のバックアップフォルダ設定を退避して保持
+  const currentBackupHandle = await getSetting("backupDirHandle");
+  const currentBackupName = await getSetting("backupDirName");
+
   await new Promise((resolve, reject) => {
     const t = db.transaction(["months", "masters", "settings"], "readwrite");
     for (const name of ["months", "masters", "settings"]) t.objectStore(name).clear();
     for (const m of data.months) t.objectStore("months").put(m);
     for (const m of data.masters) t.objectStore("masters").put(m);
-    for (const s of data.settings || []) t.objectStore("settings").put(s);
+    for (const s of data.settings || []) {
+      if (s && s.key !== "backupDirHandle") {
+        t.objectStore("settings").put(s);
+      }
+    }
+    if (currentBackupHandle) {
+      t.objectStore("settings").put({ key: "backupDirHandle", value: currentBackupHandle });
+    }
+    if (currentBackupName) {
+      t.objectStore("settings").put({ key: "backupDirName", value: currentBackupName });
+    }
     t.oncomplete = resolve;
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
