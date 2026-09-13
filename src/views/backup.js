@@ -103,7 +103,7 @@ export async function tryAutoBackup() {
   }
 }
 
-export async function checkShareStatus(timeoutMs = 2500) {
+export async function checkShareStatus() {
   if (!isFileSystemAccessSupported) {
     return {
       status: "unsupported",
@@ -120,7 +120,7 @@ export async function checkShareStatus(timeoutMs = 2500) {
     };
   }
 
-  // 1. 権限確認
+  // 権限確認（セッション経過や再起動による期限切れの検知）
   let perm;
   try {
     perm = await handle.queryPermission({ mode: "readwrite" });
@@ -138,7 +138,7 @@ export async function checkShareStatus(timeoutMs = 2500) {
       status: "expired",
       name,
       label: `共有: 期限切れ (${name})`,
-      title: `ブラウザのアクセス権限が期限切れです。クリックして再接続（アクセス許可）してください。`,
+      title: `ブラウザのアクセス権限が切れています。クリックして再接続（アクセス許可）してください。`,
     };
   }
   if (perm === "denied") {
@@ -150,43 +150,13 @@ export async function checkShareStatus(timeoutMs = 2500) {
     };
   }
 
-  // 2. 応答性・生存確認（ファイルサーバー/ネットワークドライブのタイムアウト検知）
-  try {
-    const alivePromise = (async () => {
-      // イテレータで先頭を1件取得試行して、ファイルサーバーのSMB/マウント接続が生きているか確認
-      const iter = handle.values();
-      await iter.next();
-      return true;
-    })();
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout")), timeoutMs)
-    );
-
-    await Promise.race([alivePromise, timeoutPromise]);
-
-    return {
-      status: "connected",
-      name,
-      label: `共有中: ${name}`,
-      title: `共有フォルダ「${name}」に正常接続されています（クリックで変更または確認）。`,
-    };
-  } catch (err) {
-    if (err.message === "Timeout") {
-      return {
-        status: "timeout",
-        name,
-        label: `共有: タイムアウト (${name})`,
-        title: `ファイルサーバー「${name}」への応答がタイムアウトしました。ネットワーク接続を確認するか、クリックして再試行してください。`,
-      };
-    }
-    return {
-      status: "unreachable",
-      name,
-      label: `共有: 切断 (${name})`,
-      title: `フォルダ「${name}」にアクセスできません（${err.message}）。クリックして再接続してください。`,
-    };
-  }
+  // 許可済み（正常接続）
+  return {
+    status: "connected",
+    name,
+    label: `共有中: ${name}`,
+    title: `共有フォルダ「${name}」に接続されています（クリックで変更または確認）。`,
+  };
 }
 
 export async function updateShareStatusBadge() {
@@ -202,7 +172,7 @@ export async function updateShareStatusBadge() {
 }
 
 export async function handleShareStatusClick() {
-  const current = await checkShareStatus(3000);
+  const current = await checkShareStatus();
   if (current.status === "unsupported") {
     alert("お使いのブラウザはフォルダ直接共有（File System Access API）に対応していません。\nPCのGoogle ChromeまたはMicrosoft Edgeをご利用ください。");
     return;
@@ -225,7 +195,7 @@ export async function handleShareStatusClick() {
       const { handle } = await getBackupFolderInfo();
       const granted = await verifyFolderPermission(handle, true);
       if (granted) {
-        toast(`共有フォルダ「${handle.name}」へのアクセスを再接続しました ✓`);
+        toast(`共有フォルダ「${handle.name}」へ再接続しました ✓`);
       } else {
         alert("アクセスが許可されませんでした。");
       }
@@ -235,11 +205,11 @@ export async function handleShareStatusClick() {
     }
     return;
   }
-  if (current.status === "timeout" || current.status === "unreachable" || current.status === "denied" || current.status === "error") {
+  if (current.status === "denied" || current.status === "error") {
     const choice = window.confirm(
-      `共有先「${current.name || "フォルダ"}」への接続に問題が発生しています。\n（${current.title}）\n\n` +
+      `共有先「${current.name || "フォルダ"}」へのアクセスが制限されています。\n（${current.title}）\n\n` +
       `【OK】: 別のフォルダを再選択する\n` +
-      `【キャンセル】: 再試行する`
+      `【キャンセル】: 閉じる`
     );
     if (choice) {
       try {
@@ -250,8 +220,6 @@ export async function handleShareStatusClick() {
       } catch (err) {
         if (err.name !== "AbortError") alert("フォルダ設定エラー: " + err.message);
       }
-    } else {
-      await updateShareStatusBadge();
     }
     return;
   }
@@ -281,9 +249,9 @@ export function initShareStatusWatcher() {
   }
   // 初回チェック
   updateShareStatusBadge();
-  // タブ再フォーカス時に権限・接続状態をチェック
+  // タブ再フォーカス時に権限・期限切れをチェック
   window.addEventListener("focus", () => updateShareStatusBadge());
-  // 45秒おきに接続とタイムアウトを監視
+  // 45秒おきに権限・期限切れを監視
   setInterval(() => updateShareStatusBadge(), 45000);
 }
 

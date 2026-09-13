@@ -101,9 +101,7 @@ header h1 {
   box-shadow: 0 0 8px rgba(245, 158, 11, 0.85);
 }
 
-/* タイムアウト・切断・エラー・拒否 */
-.share-status-btn.status-timeout,
-.share-status-btn.status-unreachable,
+/* エラー・拒否 */
 .share-status-btn.status-denied,
 .share-status-btn.status-error {
   background: rgba(239, 68, 68, 0.2);
@@ -111,14 +109,10 @@ header h1 {
   color: #fecaca;
   animation: pulse-border-err 2s infinite;
 }
-.share-status-btn.status-timeout:hover,
-.share-status-btn.status-unreachable:hover,
 .share-status-btn.status-denied:hover,
 .share-status-btn.status-error:hover {
   background: rgba(239, 68, 68, 0.32);
 }
-.share-status-btn.status-timeout .share-status-dot,
-.share-status-btn.status-unreachable .share-status-dot,
 .share-status-btn.status-denied .share-status-dot,
 .share-status-btn.status-error .share-status-dot {
   background: #ef4444;
