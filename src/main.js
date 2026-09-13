@@ -34,6 +34,13 @@ export const app = {
     $("ymInput").value = formatYm(app.ym);
     await showView(app.currentView); // 表示中の画面を新しい年月で再描画
   },
+  async refreshCurrentView() {
+    if (app.ym && $("ymInput")) {
+      $("ymInput").value = formatYm(app.ym);
+    }
+    await showView(app.currentView);
+  },
+  showView,
 };
 
 async function showView(rawName) {
