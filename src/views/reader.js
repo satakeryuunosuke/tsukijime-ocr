@@ -102,6 +102,8 @@ function statusHtml(page) {
     const labels = [...new Set(effectiveLow.map(fieldLabel))];
     return `<span class="warn">⚠ 低信頼度: ${labels.join("、")}</span>`;
   }
+  if (page.autoCorrected)
+    return `<span class="ok" style="color: #1d4ed8; font-weight: 600;">✓ OK（検算自動補正）</span>`;
   if (page.autoTuned)
     return `<span class="ok">✓ OK（マーカー自動補正）</span>`;
   return `<span class="ok">✓ OK</span>`;
@@ -270,6 +272,8 @@ async function processAll(ctx) {
     page.predictions = res.predictions || {};
     page.lowConfidence = res.lowConfidence || [];
     page.snappedRows = res.snappedRows || null;
+    page.corrections = res.corrections || [];
+    page.autoCorrected = !!res.autoCorrected;
     page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays, ctx.checksumDigits) : null;
 
     $("progressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";

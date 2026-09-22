@@ -5,10 +5,11 @@ import { transformImage } from "./geometry.js";
 import { extractRois, deleteRois } from "./extractor.js";
 import { predictNumbers } from "./predictor.js";
 import { snapRoisToBoxes } from "./boxSnap.js";
+import { correctPredictionsWithChecksum } from "./checksumCorrector.js";
 
 // srcMat: RGBA Mat（呼び出し側が delete する）
-// ctx: { roiRows, model, cfg }
-// 返り値: { ok, reason?, coords?, predictions?, lowConfidence:[names], autoTuned?, snappedRows? }
+// ctx: { roiRows, model, cfg, products, checksumDigits }
+// 返り値: { ok, reason?, coords?, predictions?, lowConfidence:[names], autoTuned?, snappedRows?, corrections?, autoCorrected? }
 export async function recognizePage(srcMat, ctx) {
   let coords = detectMarkers(srcMat);
   let autoTuned = false;
@@ -27,6 +28,20 @@ export async function recognizePage(srcMat, ctx) {
   deleteRois(rois);
   tMat.delete();
 
+  // 検算に基づく自動補正（商品マスタが存在する場合に実施）
+  let corrections = [];
+  let autoCorrected = false;
+  if (ctx?.products && Array.isArray(ctx.products) && ctx.products.length > 0) {
+    const corrResult = correctPredictionsWithChecksum(
+      predictions,
+      ctx.products,
+      ctx.checksumDigits ?? 2,
+      ctx.cfg ?? {}
+    );
+    corrections = corrResult.corrections;
+    autoCorrected = corrResult.corrected;
+  }
+
   let lowConfidence = Object.keys(predictions)
     .filter((k) => k.endsWith("_low_confidence_flag") && predictions[k] === true)
     .map((k) => k.replace("_low_confidence_flag", ""));
@@ -35,5 +50,5 @@ export async function recognizePage(srcMat, ctx) {
     lowConfidence = lowConfidence.filter((k) => k !== "total_0");
   }
 
-  return { ok: true, coords, predictions, lowConfidence, autoTuned, snappedRows };
+  return { ok: true, coords, predictions, lowConfidence, autoTuned, snappedRows, corrections, autoCorrected };
 }

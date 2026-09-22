@@ -326,6 +326,11 @@ main { max-width: 1200px; margin: 1.25rem auto; padding: 0 1rem; }
   color: #059669;
   border: 1px solid #a7f3d0;
 }
+.rv-badge.info {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
 .rv-low-tag {
   color: #b45309;
   background: #fef3c7;

@@ -43,6 +43,11 @@ function getStatusBadgeHtml(page, ctx, currentValid = null) {
     reasons.push({ cls: "warn", text: `⚠ 低信頼度: ${labels.join("、")}` });
   }
 
+  if (page.autoCorrected || (page.corrections && page.corrections.length > 0)) {
+    const count = page.corrections ? page.corrections.length : 1;
+    reasons.push({ cls: "info", text: `🔧 検算自動補正 (${count}箇所)` });
+  }
+
   if (reasons.length > 0) {
     return reasons.map((r) => `<span class="rv-badge ${r.cls}">${r.text}</span>`).join(" ");
   }
@@ -379,10 +384,20 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   const prodWrap = body.querySelector(".rv-products");
   for (const p of ctx.products) {
     const isLow = page.lowConfidence && (page.lowConfidence.includes(`${p.key}_0`) || page.lowConfidence.includes(`${p.key}_1`));
+    const isCorrected = P[`${p.key}_0_corrected`] || P[`${p.key}_1_corrected`];
+    const corrReason = P[`${p.key}_0_correction_reason`] || P[`${p.key}_1_correction_reason`] || "";
+    const corrTag = isCorrected
+      ? ` <span class="rv-auto-tag" title="${corrReason}" style="background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">🔧 自動補正</span>`
+      : "";
+
+    // 候補情報のツールチップ
+    const cand0 = P[`${p.key}_0_candidates`];
+    const candInfo = cand0 && cand0.length ? `候補: ${cand0.map((c) => `${c.digit}(${(c.prob * 100).toFixed(0)}%)`).join(", ")}` : "";
+
     const row = document.createElement("div");
     row.className = "rv-prow";
-    row.innerHTML = `<label>${p.name} <small>(${p.points}点)</small>${isLow ? ' <span class="rv-low-tag">⚠ 低信頼度</span>' : ""}</label>
-      <input type="number" min="0" max="99" inputmode="numeric" data-key="${p.key}" />`;
+    row.innerHTML = `<label>${p.name} <small>(${p.points}点)</small>${isLow ? ' <span class="rv-low-tag">⚠ 低信頼度</span>' : ""}${corrTag}</label>
+      <input type="number" min="0" max="99" inputmode="numeric" data-key="${p.key}" title="${candInfo}" />`;
     const inp = row.querySelector("input");
     inp.value = qtyOf(P, p.key) || "";
     inp.addEventListener("input", () => {
@@ -395,6 +410,15 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
 
   // 合計点数（3桁: total_2=百の位, total_1=十の位, total_0=一の位）
   const totalIn = body.querySelector(".rv-in-total");
+  const isTotalCorrected = P.total_0_corrected || P.total_1_corrected || P.total_2_corrected;
+  const totalCorrReason = P.total_0_correction_reason || P.total_1_correction_reason || P.total_2_correction_reason || "";
+  if (isTotalCorrected) {
+    const totalLabel = body.querySelector(".rv-field.rv-total label");
+    if (totalLabel) {
+      totalLabel.innerHTML += ` <span class="rv-auto-tag" title="${totalCorrReason}" style="background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">🔧 自動補正</span>`;
+    }
+  }
+
   const totalPoints = () => {
     const hasAny = P.total_0 !== "" && P.total_0 != null ||
                    P.total_1 !== "" && P.total_1 != null ||

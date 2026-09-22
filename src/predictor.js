@@ -47,17 +47,26 @@ export async function predictNumbers(rois, model, cfg) {
     x.dispose();
     y.dispose();
 
-    // ステップ3: 後処理・文脈フィルタ
+    // ステップ3: 後処理・文脈フィルタ・Top-K候補抽出
     for (let i = 0; i < n; i++) {
-      let arg = 0, mx = -Infinity;
+      const classProbs = [];
       for (let c = 0; c < 10; c++) {
-        const v = data[i * 10 + c];
-        if (v > mx) { mx = v; arg = c; }
+        classProbs.push({ digit: String(c), prob: data[i * 10 + c] });
       }
+      classProbs.sort((a, b) => b.prob - a.prob);
+
+      const top1 = classProbs[0];
+      const arg = parseInt(top1.digit, 10);
+      const mx = top1.prob;
       const { name, isTens } = meta[i];
+
       const recog =
         isTens && !cfg.tens_place_valid_classes.includes(arg) ? "" : String(arg);
       predictions[name] = recog;
+
+      // Top-3 候補を保存（自動補正・手動修正サジェスト用）
+      predictions[`${name}_candidates`] = classProbs.slice(0, 3);
+
       if (recog !== "") {
         predictions[`${name}_confidence`] = mx;
         predictions[`${name}_low_confidence_flag`] = mx < cfg.confidence_threshold;
