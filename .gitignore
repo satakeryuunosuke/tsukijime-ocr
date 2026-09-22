@@ -13,3 +13,6 @@ scratch/
 
 # ※ モデル(public/assets/model/)と価格表(product_list.csv)は
 #   アプリ動作に必須のため公開・追跡する方針（2026-07-02 決定）。
+
+# 過去スキャン抽出画像
+dataset_extracted/images/
