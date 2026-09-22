@@ -1,5 +1,5 @@
 // システム全体のバージョン定義
-export const APP_VERSION = "v29";
+export const APP_VERSION = "v30";
 
 /**
  * バージョン番号の数値を抽出 (例: "v28" -> 28)

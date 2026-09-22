@@ -4,10 +4,11 @@ import { detectMarkers, autoDetectMarkers } from "./markerDetector.js";
 import { transformImage } from "./geometry.js";
 import { extractRois, deleteRois } from "./extractor.js";
 import { predictNumbers } from "./predictor.js";
+import { snapRoisToBoxes } from "./boxSnap.js";
 
 // srcMat: RGBA Mat（呼び出し側が delete する）
 // ctx: { roiRows, model, cfg }
-// 返り値: { ok, reason?, coords?, predictions?, lowConfidence:[names], autoTuned? }
+// 返り値: { ok, reason?, coords?, predictions?, lowConfidence:[names], autoTuned?, snappedRows? }
 export async function recognizePage(srcMat, ctx) {
   let coords = detectMarkers(srcMat);
   let autoTuned = false;
@@ -19,7 +20,9 @@ export async function recognizePage(srcMat, ctx) {
   if (!coords) return { ok: false, reason: "marker" };
 
   const tMat = transformImage(srcMat, coords);
-  const rois = extractRois(tMat, ctx.roiRows);
+  const snapEnabled = ctx?.cfg?.enableBoxSnap !== false;
+  const snappedRows = snapRoisToBoxes(tMat, ctx.roiRows, { enabled: snapEnabled });
+  const rois = extractRois(tMat, snappedRows);
   const predictions = await predictNumbers(rois, ctx.model, ctx.cfg);
   deleteRois(rois);
   tMat.delete();
@@ -32,5 +35,5 @@ export async function recognizePage(srcMat, ctx) {
     lowConfidence = lowConfidence.filter((k) => k !== "total_0");
   }
 
-  return { ok: true, coords, predictions, lowConfidence, autoTuned };
+  return { ok: true, coords, predictions, lowConfidence, autoTuned, snappedRows };
 }

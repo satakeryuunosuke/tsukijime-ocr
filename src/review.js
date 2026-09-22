@@ -9,6 +9,7 @@ import { drawOverlay } from "./overlay.js";
 import { validatePage, qtyOf, toInt, fillTotalFromQty } from "./validate.js";
 import { bindGridNav } from "./keynav.js";
 import { helpBtn } from "./help.js";
+import { snapRoisToBoxes } from "./boxSnap.js";
 
 // ROI名（date_0, notes_Y_1 など）→ 日本語の項目名
 function fieldLabel(name, products = []) {
@@ -104,7 +105,10 @@ async function recognizeWithCoords(page, rawCanvas, ctx) {
   const src = cv.imread(rawCanvas);
   const tMat = transformImage(src, page.coords);
   src.delete();
-  const rois = extractRois(tMat, ctx.roiRows);
+  const snapEnabled = ctx?.cfg?.enableBoxSnap !== false;
+  const snappedRows = snapRoisToBoxes(tMat, ctx.roiRows, { enabled: snapEnabled });
+  page.snappedRows = snappedRows;
+  const rois = extractRois(tMat, snappedRows);
   page.predictions = await predictNumbers(rois, ctx.model, ctx.cfg);
   let lowConfidence = Object.keys(page.predictions)
     .filter((k) => k.endsWith("_low_confidence_flag") && page.predictions[k] === true)
@@ -356,7 +360,7 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
         for (const p of page.coords) { g.beginPath(); g.arc(p[0], p[1], 10, 0, Math.PI * 2); g.fill(); }
       }
     } else {
-      drawOverlay(disp, ctx.roiRows, P, selected);
+      drawOverlay(disp, page.snappedRows || ctx.roiRows, P, selected);
     }
   };
 

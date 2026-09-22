@@ -269,6 +269,7 @@ async function processAll(ctx) {
     page.autoTuned = !!res.autoTuned;
     page.predictions = res.predictions || {};
     page.lowConfidence = res.lowConfidence || [];
+    page.snappedRows = res.snappedRows || null;
     page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays, ctx.checksumDigits) : null;
 
     $("progressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";
