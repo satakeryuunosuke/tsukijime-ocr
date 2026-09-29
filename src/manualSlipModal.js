@@ -146,10 +146,11 @@ export function openManualSlipModal({
       }
     };
 
-    // 商品選択肢のHTMLキャッシュ
-    const productOptionsHtml = products
-      .map((p) => `<option value="${p.key}">${p.name}（${p.points}点）</option>`)
-      .join("");
+    // 商品選択肢のHTMLキャッシュ（先頭に未選択肢を追加）
+    const productOptionsHtml = [
+      `<option value="">-- 商品を選択してください --</option>`,
+      ...products.map((p) => `<option value="${p.key}">${p.name}（${p.points}点）</option>`),
+    ].join("");
 
     // 行追加
     function addRow(initKey = "", initQty = 1) {
@@ -159,7 +160,7 @@ export function openManualSlipModal({
       row.className = "manual-item-row";
       row.dataset.rowId = String(rowId);
 
-      const defaultKey = initKey || (products[0] ? products[0].key : "");
+      const defaultKey = initKey || "";
       row.innerHTML = `
         <div class="manual-col-product">
           <select class="manual-product-select" aria-label="商品">
@@ -214,7 +215,7 @@ export function openManualSlipModal({
         if (!sel || !qtyInp) return;
         const key = sel.value;
         const qty = toInt(qtyInp.value);
-        if (qty > 0) {
+        if (key && qty > 0) {
           qtyMap.set(key, (qtyMap.get(key) || 0) + qty);
         }
       });
@@ -312,6 +313,7 @@ export function openManualSlipModal({
       // 商品データの集約
       const rows = Array.from(container.querySelectorAll(".manual-item-row"));
       const qtyMap = new Map();
+      let hasUnselectedProduct = false;
       let hasInvalidQty = false;
 
       rows.forEach((row) => {
@@ -319,6 +321,10 @@ export function openManualSlipModal({
         const qtyInp = row.querySelector(".manual-qty-input");
         if (!sel || !qtyInp) return;
         const key = sel.value;
+        if (!key) {
+          hasUnselectedProduct = true;
+          return;
+        }
         const rawVal = qtyInp.value.trim();
         const qty = toInt(rawVal);
         if (rawVal === "" || isNaN(qty) || qty <= 0) {
@@ -328,13 +334,18 @@ export function openManualSlipModal({
         }
       });
 
+      if (hasUnselectedProduct) {
+        showError("商品が選択されていない行があります。商品を選択するか、右端の「✕」で行を削除してください。");
+        return;
+      }
+
       if (hasInvalidQty) {
         showError("すべての商品の個数に 1 以上の数値を入力してください。");
         return;
       }
 
       if (qtyMap.size === 0) {
-        showError("商品を1品目以上指定してください。");
+        showError("商品を1品目以上選択してください。");
         return;
       }
 
