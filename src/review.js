@@ -122,6 +122,12 @@ async function recognizeWithCoords(page, rawCanvas, ctx) {
     lowConfidence = lowConfidence.filter((k) => k !== "total_0");
   }
   page.lowConfidence = lowConfidence;
+
+  // 台形補正画像も更新
+  const tCanvas = document.createElement("canvas");
+  cv.imshow(tCanvas, tMat);
+  page.image = tCanvas.toDataURL("image/jpeg", 0.82);
+
   deleteRois(rois);
   tMat.delete();
 }
@@ -294,12 +300,19 @@ function cornerMode(body, rawCanvas, ctx, onDone) {
 function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   const cv = window.cv;
   // 台形補正画像を1枚だけ作ってオフスクリーンに保持
-  const src = cv.imread(rawCanvas);
-  const tMat = transformImage(src, page.coords);
-  src.delete();
-  const tCanvas = document.createElement("canvas");
-  cv.imshow(tCanvas, tMat);
-  tMat.delete();
+  let tCanvas;
+  const hasRaw = page.sourceIdx !== undefined;
+  if (hasRaw && page.coords) {
+    const src = cv.imread(rawCanvas);
+    const tMat = transformImage(src, page.coords);
+    src.delete();
+    tCanvas = document.createElement("canvas");
+    cv.imshow(tCanvas, tMat);
+    tMat.delete();
+  } else {
+    // 復元された画像（page.image）は既に台形補正済み
+    tCanvas = rawCanvas;
+  }
 
   const isDigits2 = Number(ctx?.checksumDigits ?? 2) === 2;
   const isDateLow = page.lowConfidence && (page.lowConfidence.includes("date_0") || page.lowConfidence.includes("date_1"));
@@ -310,7 +323,7 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   body.innerHTML = `
     <div class="rv-edit">
       <div class="rv-img">
-        <div class="rv-img-tools"><button class="btn-sub rv-raw-toggle">元のスキャン画像を表示</button></div>
+        <div class="rv-img-tools"><button class="btn-sub rv-raw-toggle"${hasRaw ? "" : ' style="display:none;"'}>元のスキャン画像を表示</button></div>
         <canvas class="rv-disp"></canvas>
       </div>
       <div class="rv-form">
@@ -342,11 +355,13 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   let showRaw = false;
   let lastSelected = null;
   const rawToggle = body.querySelector(".rv-raw-toggle");
-  rawToggle.onclick = () => {
-    showRaw = !showRaw;
-    rawToggle.textContent = showRaw ? "補正後の画像に戻す" : "元のスキャン画像を表示";
-    redraw(lastSelected);
-  };
+  if (hasRaw) {
+    rawToggle.onclick = () => {
+      showRaw = !showRaw;
+      rawToggle.textContent = showRaw ? "補正後の画像に戻す" : "元のスキャン画像を表示";
+      redraw(lastSelected);
+    };
+  }
 
   const redraw = (selected) => {
     lastSelected = selected;
@@ -472,6 +487,9 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
     page.ok = true;
     page.lowConfidence = [];         // 手動確認済みとして低信頼度フラグを解除
     page.autoCorrected = false;      // 手動確認済みとして要チェック状態を解除
+    if (!page.image && tCanvas) {
+      page.image = tCanvas.toDataURL("image/jpeg", 0.82);
+    }
     if (ctx.onUpdate) ctx.onUpdate(page);
     close();
   };

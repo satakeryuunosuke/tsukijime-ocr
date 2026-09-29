@@ -47,9 +47,26 @@ async function buildCtx(ym) {
   };
 }
 
-// ---- 生画像の遅延レンダリング ----
+// ---- 生画像（または保存済み画像）の遅延レンダリング ----
 async function renderRaw(page) {
+  if (page.sourceIdx === undefined) {
+    if (page.image) {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = page.image;
+      });
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      return c;
+    }
+    return null;
+  }
   const s = sources[page.sourceIdx];
+  if (!s) return null;
   if (s.type === "pdf") return await renderPdfPage(s.doc, page.pageNum, 1654);
   const c = document.createElement("canvas");
   c.width = s.bitmap.width;
@@ -212,11 +229,14 @@ async function saveOkPagesToMonth() {
   if (okPages.length) {
     const byName = new Map(month.pages.map((p) => [p.name, p]));
     for (const p of okPages) {
+      const existing = byName.get(p.name);
       byName.set(p.name, {
         name: p.name,
         predictions: p.predictions,
         savedAt: new Date().toISOString(),
         manual: Boolean(p.manual),
+        image: p.image || existing?.image || null,
+        coords: p.coords || existing?.coords || null,
       });
     }
     month.pages = [...byName.values()];
@@ -289,6 +309,7 @@ async function processAll(ctx) {
     page.snappedRows = res.snappedRows || null;
     page.corrections = res.corrections || [];
     page.autoCorrected = !!res.autoCorrected;
+    page.image = res.image || null;
     page.valid = res.ok ? validatePage(page.predictions, ctx.products, ctx.maxDays, ctx.checksumDigits) : null;
 
     $("progressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";
@@ -399,6 +420,8 @@ async function handleManualEntry(existingPage = null) {
         predictions: page.predictions,
         savedAt: page.savedAt,
         manual: isManual,
+        image: existingPage?.image || page.image || null,
+        coords: existingPage?.coords || page.coords || null,
       };
       if (existingIdx >= 0) {
         pagesList[existingIdx] = savedItem;
@@ -411,6 +434,8 @@ async function handleManualEntry(existingPage = null) {
 
       // メモリ上の pages 配列の更新
       page.manual = isManual;
+      page.image = savedItem.image;
+      page.coords = savedItem.coords;
       page.valid = validatePage(
         page.predictions,
         currentCtx.products,
@@ -451,17 +476,22 @@ async function handleManualEntry(existingPage = null) {
 
 // 訂正モーダルを開いて、閉じたら再描画・保存する
 async function reviewPage(page) {
-  if (page.manual || page.sourceIdx === undefined) {
+  if (page.manual) {
     await handleManualEntry(page);
     return;
   }
-  await openReview(page, {
-    ...currentCtx,
-    renderRaw,
-    onUpdate: () => renderResults(),
-  });
-  renderResults();
-  await saveOkPagesToMonth();
+  if (page.sourceIdx !== undefined || page.image) {
+    await openReview(page, {
+      ...currentCtx,
+      renderRaw,
+      onUpdate: () => renderResults(),
+    });
+    renderResults();
+    await saveOkPagesToMonth();
+    return;
+  }
+  toast("※この交換票の画像データはありません。数値を直接編集します。");
+  await handleManualEntry(page);
 }
 
 // 要対応のページを順番に連続で修正する。
@@ -543,6 +573,8 @@ export async function show() {
         predictions: p.predictions,
         savedAt: p.savedAt,
         manual: Boolean(p.manual),
+        image: p.image || null,
+        coords: p.coords || null,
         ok: true,
         valid: validatePage(
           p.predictions,

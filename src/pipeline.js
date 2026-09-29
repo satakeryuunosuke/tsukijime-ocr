@@ -25,6 +25,10 @@ export async function recognizePage(srcMat, ctx) {
   const snappedRows = snapRoisToBoxes(tMat, ctx.roiRows, { enabled: snapEnabled });
   const rois = extractRois(tMat, snappedRows);
   const predictions = await predictNumbers(rois, ctx.model, ctx.cfg);
+  const tCanvas = document.createElement("canvas");
+  window.cv.imshow(tCanvas, tMat);
+  const image = tCanvas.toDataURL("image/jpeg", 0.82);
+
   deleteRois(rois);
   tMat.delete();
 
@@ -50,5 +54,5 @@ export async function recognizePage(srcMat, ctx) {
     lowConfidence = lowConfidence.filter((k) => k !== "total_0");
   }
 
-  return { ok: true, coords, predictions, lowConfidence, autoTuned, snappedRows, corrections, autoCorrected };
+  return { ok: true, coords, predictions, lowConfidence, autoTuned, snappedRows, corrections, autoCorrected, image };
 }
