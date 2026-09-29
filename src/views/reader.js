@@ -6,6 +6,7 @@ import { buildCsv, buildAggregatedCsv, downloadCsv } from "../csv.js";
 import { validatePage, daysInMonth, qtyOf, toInt } from "../validate.js";
 import { formatYm } from "../dateUtils.js";
 import { openReview } from "../review.js";
+import { openManualSlipModal } from "../manualSlipModal.js";
 import { ensureMonth, putMonth, getMaster, getSetting } from "../db.js";
 import { toast } from "../toast.js";
 
@@ -40,7 +41,7 @@ async function buildCtx(ym) {
     roiRows: ensureTotal0(master.roiRows),
     products: master.products,
     cfg: master.config,
-    model: app.engine.model,
+    model: app?.engine?.model || null,
     maxDays: daysInMonth(ym),
     checksumDigits: Number(checksumDigits),
   };
@@ -93,25 +94,30 @@ function getEffectiveLow(page) {
 }
 
 function statusHtml(page) {
+  if (page.manual) return `<span class="ok">✓ OK（手動登録）</span>`;
   if (!page.ok) return `<span class="err">✗ マーカー検出失敗（クリックで手動補正）</span>`;
   const v = page.valid || {};
   if (v.checksumOk === false) return `<span class="err">✗ 合計不一致（要確認）</span>`;
   if (v.dateOk === false) return `<span class="err">✗ 日付不正（要確認）</span>`;
+  if (page.autoCorrected) {
+    const count = page.corrections ? page.corrections.length : 1;
+    return `<span class="warn" style="color: #d97706; font-weight: 600;">⚠ 要チェック（検算補正 ${count}箇所）</span>`;
+  }
   const effectiveLow = getEffectiveLow(page);
   if (effectiveLow.length) {
     const labels = [...new Set(effectiveLow.map(fieldLabel))];
     return `<span class="warn">⚠ 低信頼度: ${labels.join("、")}</span>`;
   }
-  if (page.autoCorrected)
-    return `<span class="ok" style="color: #1d4ed8; font-weight: 600;">✓ OK（検算自動補正）</span>`;
   if (page.autoTuned)
     return `<span class="ok">✓ OK（マーカー自動補正）</span>`;
   return `<span class="ok">✓ OK</span>`;
 }
 
 // マーカー成功かつ検算・日付OKだが、低信頼度項目だけがあるページ
+// ※検算補正候補があるページは個別確認（要チェック）が必要なため一括承認対象から除外
 function isLowConfidenceOnly(p) {
   if (!p.ok) return false;
+  if (p.autoCorrected) return false;
   const v = p.valid || {};
   if (v.checksumOk === false || v.dateOk === false) return false;
   return getEffectiveLow(p).length > 0;
@@ -120,6 +126,7 @@ function isLowConfidenceOnly(p) {
 // 状態列に「✓ OK」（チェックマーク）が表示される行かどうか。
 function isFullyOk(page) {
   if (!page.ok) return false;
+  if (page.autoCorrected) return false; // 検算補正候補がある場合は手動確認（要チェック）が必要
   const v = page.valid || {};
   if (v.checksumOk === false || v.dateOk === false) return false;
   if (getEffectiveLow(page).length) return false;
@@ -157,16 +164,19 @@ function renderResults() {
   const ok = pages.filter((p) => p.ok);
   const markerFail = pages.filter((p) => !p.ok);
   const needFix = ok.filter((p) => p.valid && (p.valid.checksumOk === false || p.valid.dateOk === false));
-  const lowConf = ok.filter((p) => getEffectiveLow(p).length);
+  const autoCorr = ok.filter((p) => p.autoCorrected);
+  const lowConf = ok.filter((p) => !p.autoCorrected && getEffectiveLow(p).length);
   const lowOnlyPages = pages.filter(isLowConfidenceOnly);
+
+  const autoCorrHtml = autoCorr.length ? ` / <span class="warn" style="color: #d97706; font-weight: 600;">検算要チェック ${autoCorr.length}</span>` : "";
 
   $("summary").innerHTML =
     `<b>${pages.length}</b> ページ / 認識 <b>${ok.length}</b> / ` +
-    `<span class="err">検算・日付NG ${needFix.length}</span> / ` +
+    `<span class="err">検算・日付NG ${needFix.length}</span>${autoCorrHtml} / ` +
     `<span class="warn">低信頼度 ${lowConf.length}</span> / ` +
     `<span class="err">マーカー失敗 ${markerFail.length}</span>`;
 
-  // 要対応（マーカー失敗・NG・低信頼度）は別枠に、確定分は下の表に分けて表示
+  // 要対応（マーカー失敗・NG・検算要チェック・低信頼度）は別枠に、確定分は下の表に分けて表示
   const attention = [], done = [];
   pages.forEach((p, i) => (isFullyOk(p) ? done : attention).push(rowHtml(p, i)));
   $("needFixWrap").hidden = attention.length === 0;
@@ -340,8 +350,105 @@ function onDownloadAggregated() {
   downloadCsv(csv, `recognition_results_${ym}_daily.csv`);
 }
 
+// 手動登録モーダルを開く（新規登録、または既存手動登録の編集）
+async function handleManualEntry(existingPage = null) {
+  const targetYm = sessionYm || app.ym;
+  const month = await ensureMonth(targetYm);
+  if (month.locked) {
+    alert(`この月（${formatYm(targetYm)}）は月締め確定（ロック中）のため、交換票の追加・変更はできません。\n変更を行う場合は「月締め」タブからロックを解除してください。`);
+    return;
+  }
+
+  if (!currentCtx || sessionYm !== targetYm) {
+    sessionYm = targetYm;
+    currentCtx = await buildCtx(sessionYm);
+  }
+
+  const existingNames = new Set([
+    ...(month.pages || []).map((p) => p.name),
+    ...pages.map((p) => p.name),
+  ]);
+
+  await openManualSlipModal({
+    ym: targetYm,
+    products: currentCtx.products,
+    maxDays: currentCtx.maxDays,
+    existingNames,
+    initialPage: existingPage,
+    onSave: async ({ page, previousName }) => {
+      const curMonth = await ensureMonth(targetYm);
+      if (curMonth.locked) {
+        alert("月締め確定（ロック中）のため保存できませんでした。");
+        return;
+      }
+
+      // month.pages の更新
+      const pagesList = [...(curMonth.pages || [])];
+      if (previousName && previousName !== page.name) {
+        const pIdx = pagesList.findIndex((p) => p.name === previousName);
+        if (pIdx >= 0) pagesList.splice(pIdx, 1);
+      }
+      const existingIdx = pagesList.findIndex((p) => p.name === page.name);
+      const savedItem = {
+        name: page.name,
+        predictions: page.predictions,
+        savedAt: page.savedAt,
+        manual: true,
+      };
+      if (existingIdx >= 0) {
+        pagesList[existingIdx] = savedItem;
+      } else {
+        pagesList.push(savedItem);
+      }
+      curMonth.pages = pagesList;
+      curMonth.readerSkipped = false;
+      await putMonth(curMonth);
+
+      // メモリ上の pages 配列の更新
+      page.valid = validatePage(
+        page.predictions,
+        currentCtx.products,
+        currentCtx.maxDays,
+        currentCtx.checksumDigits
+      );
+      if (previousName && previousName !== page.name) {
+        const memIdx = pages.findIndex((p) => p.name === previousName);
+        if (memIdx >= 0) pages.splice(memIdx, 1);
+      }
+      const memExistingIdx = pages.findIndex((p) => p.name === page.name);
+      if (memExistingIdx >= 0) {
+        pages[memExistingIdx] = page;
+      } else {
+        pages.push(page);
+      }
+
+      renderResults();
+      await renderSavedInfo();
+      toast(`交換票「${page.name}」を${previousName ? "更新" : "登録"}しました ✓`);
+    },
+    onDelete: async (pageName) => {
+      const curMonth = await ensureMonth(targetYm);
+      if (curMonth.locked) {
+        alert("月締め確定（ロック中）のため削除できませんでした。");
+        return;
+      }
+      curMonth.pages = (curMonth.pages || []).filter((p) => p.name !== pageName);
+      await putMonth(curMonth);
+
+      pages = pages.filter((p) => p.name !== pageName);
+      renderResults();
+      await renderSavedInfo();
+      toast(`交換票「${pageName}」を削除しました`);
+    },
+  });
+}
+
 // 訂正モーダルを開いて、閉じたら再描画・保存する
 async function reviewPage(page) {
+  if (page.manual || page.sourceIdx === undefined) {
+    await handleManualEntry(page);
+    return;
+  }
   await openReview(page, {
     ...currentCtx,
     renderRaw,
@@ -390,6 +497,11 @@ export function init(appRef) {
   const approveLowBtn = $("approveLowBtn");
   if (approveLowBtn) approveLowBtn.addEventListener("click", onApproveLowOnly);
 
+  const manualEntryBtn = $("manualEntryBtn");
+  if (manualEntryBtn) manualEntryBtn.addEventListener("click", () => handleManualEntry());
+  const manualAddMoreBtn = $("manualAddMoreBtn");
+  if (manualAddMoreBtn) manualAddMoreBtn.addEventListener("click", () => handleManualEntry());
+
   $("fileInput").addEventListener("change", (e) => {
     if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files));
   });
@@ -414,6 +526,32 @@ export async function show() {
   const isLocked = !!month.locked;
   const isSkipped = !!month.readerSkipped;
   const hasPages = month.pages && month.pages.length > 0;
+
+  // 年月が変わった場合、または pages が空だが保存済みページがある場合はロードして表示
+  if (sessionYm !== app.ym || (pages.length === 0 && hasPages)) {
+    sessionYm = app.ym;
+    currentCtx = await buildCtx(sessionYm);
+    if (pages.length === 0 && hasPages) {
+      pages = month.pages.map((p) => ({
+        name: p.name,
+        predictions: p.predictions,
+        savedAt: p.savedAt,
+        manual: !!p.manual || p.sourceIdx === undefined,
+        ok: true,
+        valid: validatePage(
+          p.predictions,
+          currentCtx.products,
+          currentCtx.maxDays,
+          currentCtx.checksumDigits
+        ),
+      }));
+      renderResults();
+    } else if (sessionYm !== app.ym) {
+      // 別の月に切り替わってかつ月データが空の場合
+      pages = [];
+      renderResults();
+    }
+  }
 
   const skipBannerEl = $("readerSkipBanner");
   if (skipBannerEl) {
@@ -445,14 +583,23 @@ export async function show() {
     }
   }
 
-  if (app.engine) {
-    if (month.locked) {
-      setStatus(`🔒 この月（${formatYm(app.ym)}）は月締め確定（ロック中）のため読み取りできません。（月締めタブでロック解除可能）`);
-      $("fileInput").disabled = true;
-    } else {
-      setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択してください。`);
+  const manualEntryBtn = $("manualEntryBtn");
+  const manualAddMoreBtn = $("manualAddMoreBtn");
+
+  if (month.locked) {
+    setStatus(`🔒 この月（${formatYm(app.ym)}）は月締め確定（ロック中）のため読み取り・追加できません。（月締めタブでロック解除可能）`);
+    $("fileInput").disabled = true;
+    if (manualEntryBtn) manualEntryBtn.disabled = true;
+    if (manualAddMoreBtn) manualAddMoreBtn.disabled = true;
+  } else {
+    if (app.engine) {
+      setStatus(`準備完了。${formatYm(app.ym)} の交換票（PDF/画像）を選択または手動登録してください。`);
       $("fileInput").disabled = false;
+    } else {
+      setStatus(`初期化中… 交換票の手動登録は可能です。`);
     }
+    if (manualEntryBtn) manualEntryBtn.disabled = false;
+    if (manualAddMoreBtn) manualAddMoreBtn.disabled = false;
   }
   await renderSavedInfo();
 }

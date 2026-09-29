@@ -45,7 +45,7 @@ function getStatusBadgeHtml(page, ctx, currentValid = null) {
 
   if (page.autoCorrected || (page.corrections && page.corrections.length > 0)) {
     const count = page.corrections ? page.corrections.length : 1;
-    reasons.push({ cls: "info", text: `🔧 検算自動補正 (${count}箇所)` });
+    reasons.push({ cls: "warn", text: `⚠ 要チェック（検算補正 ${count}箇所）` });
   }
 
   if (reasons.length > 0) {
@@ -387,7 +387,7 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
     const isCorrected = P[`${p.key}_0_corrected`] || P[`${p.key}_1_corrected`];
     const corrReason = P[`${p.key}_0_correction_reason`] || P[`${p.key}_1_correction_reason`] || "";
     const corrTag = isCorrected
-      ? ` <span class="rv-auto-tag" title="${corrReason}" style="background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">🔧 自動補正</span>`
+      ? ` <span class="rv-auto-tag" title="${corrReason}" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">⚠ 要チェック（検算補正）</span>`
       : "";
 
     // 候補情報のツールチップ
@@ -415,7 +415,7 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
   if (isTotalCorrected) {
     const totalLabel = body.querySelector(".rv-field.rv-total label");
     if (totalLabel) {
-      totalLabel.innerHTML += ` <span class="rv-auto-tag" title="${totalCorrReason}" style="background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">🔧 自動補正</span>`;
+      totalLabel.innerHTML += ` <span class="rv-auto-tag" title="${totalCorrReason}" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 0.75rem; padding: 1px 5px; border-radius: 4px; vertical-align: middle;">⚠ 要チェック（検算補正）</span>`;
     }
   }
 
@@ -471,6 +471,7 @@ function editMode(body, page, rawCanvas, ctx, close, updateBadge) {
     page.valid = curValid;
     page.ok = true;
     page.lowConfidence = [];         // 手動確認済みとして低信頼度フラグを解除
+    page.autoCorrected = false;      // 手動確認済みとして要チェック状態を解除
     if (ctx.onUpdate) ctx.onUpdate(page);
     close();
   };

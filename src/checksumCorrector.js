@@ -1,6 +1,6 @@
-// 検算（合計点数）を用いた数字認識の自動補正モジュール。
+// 検算（合計点数）を用いた数字認識の候補探索・補正モジュール。
 // 検算不一致が発生した場合、低信頼度項目や Top-K 候補を探索し、
-// 検算が合致する一意の組み合わせを発見した際に自動補正する。
+// 検算が合致する組み合わせを発見した際に補正候補を適用（要チェック状態）とする。
 
 import { validatePage, toInt } from "./validate.js";
 
@@ -133,10 +133,11 @@ export function correctPredictionsWithChecksum(predictions, products, checksumDi
     predictions[`${fieldName}_original`] = from;
     predictions[`${fieldName}_corrected`] = true;
     predictions[`${fieldName}_correction_reason`] =
-      `検算による自動補正（元: "${from}", 信頼度: ${(origConf * 100).toFixed(0)}% → 新: "${to}", 候補確率: ${(prob * 100).toFixed(0)}%）`;
+      `検算による補正候補（要チェック）（元: "${from}", 信頼度: ${(origConf * 100).toFixed(0)}% → 候補: "${to}", 候補確率: ${(prob * 100).toFixed(0)}%）`;
     predictions[fieldName] = to;
     predictions[`${fieldName}_confidence`] = prob;
-    predictions[`${fieldName}_low_confidence_flag`] = false;
+    // 自動承認ではなく要チェックにするため、フラグを立てて目視確認を促す
+    predictions[`${fieldName}_low_confidence_flag`] = true;
 
     return {
       predictions,

@@ -66,10 +66,15 @@
       <section id="dropzone" class="dropzone">
         <p class="dz-title">交換票の PDF または 画像をドラッグ＆ドロップ <button type="button" class="help-btn help-btn-sm" data-help="reader_dropzone" title="ファイル選択・対応形式について">?</button></p>
         <p class="dz-or">または</p>
-        <label class="btn">
-          ファイルを選択
-          <input id="fileInput" type="file" accept="application/pdf,image/*" multiple disabled hidden />
-        </label>
+        <div style="display: flex; justify-content: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .25rem;">
+          <label class="btn">
+            ファイルを選択
+            <input id="fileInput" type="file" accept="application/pdf,image/*" multiple disabled hidden />
+          </label>
+          <button id="manualEntryBtn" class="btn btn-manual-entry" type="button">
+            ✍ 手動で登録する
+          </button>
+        </div>
         <p id="status" class="status">読み込み中…</p>
       </section>
       <div id="readerSkipArea" style="margin-top: .75rem; text-align: right;"></div>
@@ -82,6 +87,7 @@
         <div class="results-head">
           <div id="summary" class="summary"></div>
           <div class="dl">
+            <button id="manualAddMoreBtn" class="btn btn-manual-entry" type="button" style="font-size: .85rem; padding: .45rem .8rem;">✍ 手動で追加</button>
             <button id="downloadBtn" class="btn" disabled>CSV ダウンロード</button>
             <button id="downloadAggBtn" class="btn" disabled>日別集計CSV</button>
             <button type="button" class="help-btn help-btn-sm" data-help="reader_csv_export" title="CSV出力について">?</button>
