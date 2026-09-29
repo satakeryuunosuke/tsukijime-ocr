@@ -11,6 +11,7 @@ import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
 import { triggerBackupDownload, tryAutoBackup, getBackupFolderInfo, saveBackupToFolder } from "./backup.js";
 import { helpBtn } from "../help.js";
+import { openDiscrepancyModal } from "../discrepancyModal.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -192,7 +193,10 @@ function stocktakeRows(products, ledger, month) {
     const diff = physV === null ? null : physV - book;
     const diffHtml = diff === null ? "－"
       : diff === 0 ? `<span class="ok">0 ✓</span>`
-      : `<span class="err">${diff > 0 ? "+" : ""}${diff}</span>`;
+      : `<div class="diff-cell-content">
+           <span class="err">${diff > 0 ? "+" : ""}${diff}</span>
+           <button type="button" class="btn-sub btn-diff-scan" data-diffkey="${p.key}" title="この商品のスキャン画像と読み取り内容を確認">🔍 確認</button>
+         </div>`;
     return `
       <tr>
         <td><a href="javascript:void 0" class="lg-detail" data-key="${p.key}">${p.name}</a></td>
@@ -426,12 +430,27 @@ export async function show() {
       </div>
     </div>`;
 
+  const diffInfo = month.physicalCount ? computeDiffs(month, products) : { shortages: {}, surpluses: {} };
+  const diffProductCount = Object.keys(diffInfo.shortages).length + Object.keys(diffInfo.surpluses).length;
+  const discrepancyBannerHtml = diffProductCount > 0 ? `
+    <div class="discrepancy-banner">
+      <div class="discrepancy-banner-info">
+        <span class="discrepancy-icon">⚠</span>
+        <div>
+          <div class="discrepancy-title">実棚数と差異がある商品が <b>${diffProductCount}</b> 品目あります</div>
+          <div class="discrepancy-desc">交換票のスキャン画像とAI読み取り結果を突き合わせて、読み取り誤りがないか確認・訂正できます。</div>
+        </div>
+      </div>
+      <button type="button" id="clOpenDiffAll" class="btn btn-diff-banner">🔍 差異商品のスキャン・読み取りを確認</button>
+    </div>` : "";
+
   el().innerHTML = `
     <h2 class="view-title">
       月締め・棚卸（${formatYm(app.ym)}）${isLocked ? '<span class="lock-badge">🔒 締め確定済み</span>' : ""}
       ${helpBtn("closing_overview", { size: "lg", title: "月締め・棚卸作業の全体フロー" })}
     </h2>
     ${lockBannerHtml}
+    ${discrepancyBannerHtml}
     ${warns.length ? `<div class="panel warn-panel">${warns.map((w) => `<div>⚠ ${w}</div>`).join("")}</div>` : ""}
     <div class="panel">
       <h3>
@@ -502,6 +521,37 @@ export async function show() {
       detailKey = detailKey === a.dataset.key ? null : a.dataset.key;
       await show();
     }));
+
+  el().querySelectorAll(".btn-diff-scan").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openDiscrepancyModal({
+        month,
+        products,
+        master,
+        app,
+        initialProductKey: btn.dataset.diffkey,
+        onUpdated: async () => {
+          await show();
+        },
+      });
+    });
+  });
+
+  const openDiffAllBtn = el().querySelector("#clOpenDiffAll");
+  if (openDiffAllBtn) {
+    openDiffAllBtn.addEventListener("click", () => {
+      openDiscrepancyModal({
+        month,
+        products,
+        master,
+        app,
+        initialProductKey: null,
+        onUpdated: async () => {
+          await show();
+        },
+      });
+    });
+  }
 
   if (!isLocked) {
     // 実棚数の入力欄を Enter / 矢印キーで移動できるようにする
