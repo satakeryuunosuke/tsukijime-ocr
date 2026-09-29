@@ -212,7 +212,12 @@ async function saveOkPagesToMonth() {
   if (okPages.length) {
     const byName = new Map(month.pages.map((p) => [p.name, p]));
     for (const p of okPages) {
-      byName.set(p.name, { name: p.name, predictions: p.predictions, savedAt: new Date().toISOString() });
+      byName.set(p.name, {
+        name: p.name,
+        predictions: p.predictions,
+        savedAt: new Date().toISOString(),
+        manual: Boolean(p.manual),
+      });
     }
     month.pages = [...byName.values()];
     month.readerSkipped = false;
@@ -388,12 +393,12 @@ async function handleManualEntry(existingPage = null) {
         const pIdx = pagesList.findIndex((p) => p.name === previousName);
         if (pIdx >= 0) pagesList.splice(pIdx, 1);
       }
-      const existingIdx = pagesList.findIndex((p) => p.name === page.name);
+      const isManual = existingPage ? Boolean(existingPage.manual) : true;
       const savedItem = {
         name: page.name,
         predictions: page.predictions,
         savedAt: page.savedAt,
-        manual: true,
+        manual: isManual,
       };
       if (existingIdx >= 0) {
         pagesList[existingIdx] = savedItem;
@@ -405,6 +410,7 @@ async function handleManualEntry(existingPage = null) {
       await putMonth(curMonth);
 
       // メモリ上の pages 配列の更新
+      page.manual = isManual;
       page.valid = validatePage(
         page.predictions,
         currentCtx.products,
@@ -536,7 +542,7 @@ export async function show() {
         name: p.name,
         predictions: p.predictions,
         savedAt: p.savedAt,
-        manual: !!p.manual || p.sourceIdx === undefined,
+        manual: Boolean(p.manual),
         ok: true,
         valid: validatePage(
           p.predictions,

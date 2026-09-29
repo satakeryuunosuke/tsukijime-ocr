@@ -383,7 +383,7 @@ export function openManualSlipModal({
         name,
         predictions,
         savedAt: new Date().toISOString(),
-        manual: true,
+        manual: initialPage ? Boolean(initialPage.manual) : true,
         ok: true,
       };
 
