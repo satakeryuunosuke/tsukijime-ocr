@@ -7,6 +7,7 @@ import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm, prevYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
+import { escapeHtml } from "../escape.js";
 
 let app = null;
 const el = () => document.getElementById("view-carryover");
@@ -89,9 +90,9 @@ export async function show() {
       <tbody>
         ${master.products.map((p) => `
           <tr>
-            <td>${p.name}</td>
+            <td>${escapeHtml(p.name)}</td>
             <td class="muted">${p.points}点</td>
-            <td><input type="number" inputmode="numeric" min="0" data-key="${p.key}"
+            <td><input type="number" inputmode="numeric" min="0" data-key="${escapeHtml(p.key)}"
                  value="${month.carryover ? toInt(co[p.key]) : ""}" placeholder="0" ${isLocked ? "disabled" : ""} /></td>
           </tr>`).join("")}
       </tbody>

@@ -3,9 +3,23 @@
 // ※ デスクトップ版 recognition_results_*.csv（_0/_1 の2列構成）とは非互換。
 import { qtyOf, toInt, computeTotalScore } from "./validate.js";
 
-function csvCell(v) {
-  const s = v === null || v === undefined ? "" : String(v);
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+export function sanitizeCsvValue(v) {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  // 数値のみ（整数・小数・負の数）は安全なのでそのまま通す
+  if (/^-?\d+(\.\d+)?$/.test(s.trim())) {
+    return s;
+  }
+  // 数式トリガー記号（=, +, -, @, \t, \r）で始まる文字列は先頭に ' を付与して無害化（CSV Injection対策）
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = "'" + s;
+  }
+  return s;
+}
+
+export function csvCell(v) {
+  const s = sanitizeCsvValue(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
 // rows: [{ predictions }]（recognizePage / 訂正済みの結果）

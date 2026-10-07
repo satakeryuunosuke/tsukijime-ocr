@@ -8,6 +8,7 @@ import { putMonth } from "./db.js";
 import { openReview } from "./review.js";
 import { openManualSlipModal } from "./manualSlipModal.js";
 import { toast } from "./toast.js";
+import { escapeHtml } from "./escape.js";
 
 function ensureTotal0(roiRows) {
   if (!roiRows || roiRows.some((r) => r.name === "total_0")) return roiRows;
@@ -266,8 +267,8 @@ export async function openDiscrepancyModal({
       const diffStr = p.diff > 0 ? `+${p.diff}` : `${p.diff}`;
       const badgeCls = p.diff < 0 ? "badge-shortage" : "badge-surplus";
       tabsHtml.push(`
-        <button type="button" class="disc-tab ${activeTabKey === p.key ? "active" : ""}" data-tab="${p.key}">
-          ${p.name}
+        <button type="button" class="disc-tab ${activeTabKey === p.key ? "active" : ""}" data-tab="${escapeHtml(p.key)}">
+          ${escapeHtml(p.name)}
           <span class="disc-tab-badge ${badgeCls}">差異 ${diffStr}</span>
         </button>
       `);
@@ -306,7 +307,7 @@ export async function openDiscrepancyModal({
                 const statusText = p.diff < 0 ? `不足 ${p.shortage}個` : `余剰 ${p.surplus}個`;
                 return `
                   <tr>
-                    <td><b>${p.name}</b></td>
+                    <td><b>${escapeHtml(p.name)}</b></td>
                     <td class="num">${p.book}</td>
                     <td class="num">${p.phys}</td>
                     <td class="num"><b class="${diffCls}">${diffStr}</b></td>
@@ -333,7 +334,7 @@ export async function openDiscrepancyModal({
       summaryContainer.innerHTML = `
         <div class="disc-summary-card">
           <div class="disc-summary-header">
-            <h4>${curP.name} <small>(${curP.points}点)</small></h4>
+            <h4>${escapeHtml(curP.name)} <small>(${curP.points}点)</small></h4>
             <div class="disc-diff-banner ${curP.diff < 0 ? "err" : "warn"}">
               差異: <b>${diffStr}</b> （${statusText}）
             </div>
@@ -425,7 +426,7 @@ export async function openDiscrepancyModal({
       const badgesHtml = pageDiffProducts.length
         ? pageDiffProducts.map((dp) => `
             <span class="disc-slip-badge">
-              ${dp.name}: <b>${qtyOf(p.predictions, dp.key)}個</b>
+              ${escapeHtml(dp.name)}: <b>${qtyOf(p.predictions, dp.key)}個</b>
             </span>
           `).join(" ")
         : `<span class="disc-slip-badge muted">該当差異商品の交換なし (0個)</span>`;
@@ -434,7 +435,7 @@ export async function openDiscrepancyModal({
         <div class="disc-card" data-page-idx="${idx}">
           <div class="disc-card-head">
             <div class="disc-card-meta">
-              <span class="disc-card-name">${p.name}</span>
+              <span class="disc-card-name">${escapeHtml(p.name)}</span>
               <span class="disc-card-date">${day ? `${day}日` : "日付未入力"}</span>
               <span class="disc-card-total">合計: <b>${totalScore}</b>点</span>
             </div>
@@ -443,7 +444,7 @@ export async function openDiscrepancyModal({
               ${isLocked ? `
                 <span class="muted" title="月締め確定済みのため編集不可">🔒 保護中</span>
               ` : `
-                <button type="button" class="btn-sub disc-edit-btn" data-page-name="${p.name.replace(/"/g, "&quot;")}">
+                <button type="button" class="btn-sub disc-edit-btn" data-page-name="${escapeHtml(p.name)}">
                   ✏ 読み取り内容を訂正
                 </button>
               `}
@@ -501,10 +502,10 @@ export async function openDiscrepancyModal({
         return `
           <div class="disc-roi-box">
             <div class="disc-roi-meta">
-              <span class="disc-roi-pname">${dp.name}</span>
+              <span class="disc-roi-pname">${escapeHtml(dp.name)}</span>
               <span class="disc-roi-val">AI読取: <b>${qty}</b>個</span>
             </div>
-            <canvas class="disc-roi-canvas" data-pkey="${dp.key}"></canvas>
+            <canvas class="disc-roi-canvas" data-pkey="${escapeHtml(dp.key)}"></canvas>
           </div>`;
       }).join("");
 

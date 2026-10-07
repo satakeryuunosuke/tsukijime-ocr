@@ -16,3 +16,17 @@ scratch/
 
 # 過去スキャン抽出データセット（画像・メタデータ）
 dataset_extracted/
+
+# 実務データ（月次スキャン・受払入力）
+monthly_data/
+
+# Python バイトコード・キャッシュ
+__pycache__/
+*.pyc
+
+# バックアップ・一時ファイル
+*.bak
+*.tmp
+
+# ローカル個人設定
+.claude/settings.local.json

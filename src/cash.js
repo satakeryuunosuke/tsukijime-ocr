@@ -5,6 +5,7 @@
 // 月初の金種構成と日々の現金売上から矛盾のない表を補間生成する。
 import { toInt, daysInMonth } from "./validate.js";
 import { noteProducts } from "./ledger.js";
+import { csvCell } from "./csv.js";
 
 // 金種（入力・表示用）。二千円札は入力可能だが自動補間の支払いには使わない。
 export const DENOMS = [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1];
@@ -261,5 +262,5 @@ export function buildCashReportCsv(table) {
       r.withdrawal || "",
     ]);
   }
-  return rows.map((r) => r.join(",")).join("\r\n");
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 }

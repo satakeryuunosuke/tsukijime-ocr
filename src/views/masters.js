@@ -13,6 +13,7 @@ import { toInt } from "../validate.js";
 import { bindGridNav } from "../keynav.js";
 import { formatYm, parseYm, nextYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
+import { escapeHtml } from "../escape.js";
 
 const ASSETS = "public/assets/";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -88,12 +89,12 @@ async function downloadRoiCsv() {
 
 function draftRow(p, i, total) {
   const keyCell = p.isNew
-    ? `<input class="mst-key" data-i="${i}" value="${p.key}" size="12" placeholder="例: keyholder" />`
-    : `<span class="muted">${p.key}</span>`;
+    ? `<input class="mst-key" data-i="${i}" value="${escapeHtml(p.key)}" size="12" placeholder="例: keyholder" />`
+    : `<span class="muted">${escapeHtml(p.key)}</span>`;
   return `
     <tr>
       <td>${keyCell}</td>
-      <td><input class="mst-name" data-i="${i}" value="${p.name.replace(/"/g, "&quot;")}" size="18" /></td>
+      <td><input class="mst-name" data-i="${i}" value="${escapeHtml(p.name)}" size="18" /></td>
       <td><input class="mst-points" data-i="${i}" type="number" min="5" step="5" value="${p.points}" style="width:70px" /></td>
       <td class="mst-ops">
         <button class="btn-sub" data-up="${i}" ${i === 0 ? "disabled" : ""}>↑</button>
@@ -335,7 +336,7 @@ export async function show() {
   const versionRows = allMasters.map((m) => `
     <tr ${m.version === month.masterVersion ? 'class="row-active"' : ""}>
       <td>v${m.version}</td>
-      <td>${m.label || ""}</td>
+      <td>${escapeHtml(m.label || "")}</td>
       <td>${m.effectiveFrom === "000000" ? "（最初から）" : formatYm(m.effectiveFrom) + "〜"}</td>
       <td>${m.products.length} 商品</td>
       <td>${m.version === month.masterVersion ? `<b class="ok">✓ ${formatYm(app.ym)}で使用中</b>` : ""}</td>
@@ -415,7 +416,7 @@ export async function show() {
       <h3>${formatYm(app.ym)} の商品マスタ（v${month.masterVersion}）</h3>
       <table class="result-table">
         <thead><tr><th>商品ID</th><th>名称</th><th>点数</th></tr></thead>
-        <tbody>${master.products.map((p) => `<tr><td class="muted">${p.key}</td><td>${p.name}</td><td>${p.points}点</td></tr>`).join("")}</tbody>
+        <tbody>${master.products.map((p) => `<tr><td class="muted">${escapeHtml(p.key)}</td><td>${escapeHtml(p.name)}</td><td>${p.points}点</td></tr>`).join("")}</tbody>
       </table>
     </div>
     <div class="panel">

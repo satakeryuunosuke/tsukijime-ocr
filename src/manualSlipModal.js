@@ -2,6 +2,7 @@
 // スキャン画像なしで交換票を直接作成・保存・編集できる。
 import { fillTotalFromQty, qtyOf, toInt } from "./validate.js";
 import { formatYm } from "./dateUtils.js";
+import { escapeHtml } from "./escape.js";
 
 function generateDefaultName(existingNames, day) {
   let idx = 1;
@@ -149,7 +150,7 @@ export function openManualSlipModal({
     // 商品選択肢のHTMLキャッシュ（先頭に未選択肢を追加）
     const productOptionsHtml = [
       `<option value="">-- 商品を選択してください --</option>`,
-      ...products.map((p) => `<option value="${p.key}">${p.name}（${p.points}点）</option>`),
+      ...products.map((p) => `<option value="${escapeHtml(p.key)}">${escapeHtml(p.name)}（${p.points}点）</option>`),
     ].join("");
 
     // 行追加

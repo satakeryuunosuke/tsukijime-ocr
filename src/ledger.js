@@ -6,7 +6,7 @@
 // 旧Python版と互換のCSV5種（recognition_results / summary / carryover_inventory /
 // arrival / other_manual_entries）の生成もここで行う。
 import { qtyOf, toInt, daysInMonth } from "./validate.js";
-import { buildCsv } from "./csv.js";
+import { buildCsv, csvCell } from "./csv.js";
 
 export const SPECIAL_METHODS = [
   { id: "cash", name: "現金" },
@@ -168,7 +168,7 @@ export function buildAdjustmentPages(shortages, products, day, existingNames = n
 }
 
 function joinCsv(rows) {
-  return rows.map((r) => r.join(",")).join("\r\n");
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 }
 
 // summary_YYYYMM.csv: date, <product_key...>（旧 summarize_results_B.py の出力互換）

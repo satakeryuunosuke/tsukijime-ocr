@@ -9,6 +9,7 @@ import { openReview } from "../review.js";
 import { openManualSlipModal } from "../manualSlipModal.js";
 import { ensureMonth, putMonth, getMaster, getSetting } from "../db.js";
 import { toast } from "../toast.js";
+import { escapeHtml } from "../escape.js";
 
 const ASSETS = "public/assets/";
 const $ = (id) => document.getElementById(id);
@@ -123,7 +124,7 @@ function statusHtml(page) {
   const effectiveLow = getEffectiveLow(page);
   if (effectiveLow.length) {
     const labels = [...new Set(effectiveLow.map(fieldLabel))];
-    return `<span class="warn">⚠ 低信頼度: ${labels.join("、")}</span>`;
+    return `<span class="warn">⚠ 低信頼度: ${escapeHtml(labels.join("、"))}</span>`;
   }
   if (page.autoTuned)
     return `<span class="ok">✓ OK（マーカー自動補正）</span>`;
@@ -172,8 +173,8 @@ const dateOf = (p) => (p && (`${p.date_1 ?? ""}${p.date_0 ?? ""}`)) || "-";
 function rowHtml(p, i) {
   const digits = p.ok ? digitsSummary(p.predictions).join("　") || "(なし)" : "-";
   return `<tr data-idx="${i}" class="clickable ${p.ok ? "" : "row-err"}">
-    <td>${p.name}</td><td>${p.ok ? dateOf(p.predictions) : "-"}</td>
-    <td class="digits">${digits}</td><td>${statusHtml(p)}</td>
+    <td>${escapeHtml(p.name)}</td><td>${p.ok ? escapeHtml(dateOf(p.predictions)) : "-"}</td>
+    <td class="digits">${escapeHtml(digits)}</td><td>${statusHtml(p)}</td>
     <td class="edit-cell">✎ 編集</td></tr>`;
 }
 

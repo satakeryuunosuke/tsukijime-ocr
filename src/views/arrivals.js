@@ -6,6 +6,7 @@ import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
+import { escapeHtml } from "../escape.js";
 
 let app = null;
 let selectedDay = 1;
@@ -217,15 +218,15 @@ export async function show() {
             return `
               <div class="ar-card ${hasVal ? "has-value" : ""}">
                 <div class="ar-card-head">
-                  <span class="ar-card-name">${p.name}</span>
+                  <span class="ar-card-name">${escapeHtml(p.name)}</span>
                   <span class="ar-card-pts">${p.points}点</span>
                 </div>
                 <div class="ar-card-body">
                   <div class="ar-quick-chips">
-                    <button type="button" class="ar-chip" data-add="${lot}" data-target="${p.key}" ${isLocked ? "disabled" : ""}>+${lot}</button>
+                    <button type="button" class="ar-chip" data-add="${lot}" data-target="${escapeHtml(p.key)}" ${isLocked ? "disabled" : ""}>+${lot}</button>
                   </div>
                   <div class="ar-input-wrap">
-                    <input type="number" inputmode="numeric" min="0" data-key="${p.key}" class="ar-input"
+                    <input type="number" inputmode="numeric" min="0" data-key="${escapeHtml(p.key)}" class="ar-input"
                            value="${val || ""}" placeholder="0" ${isLocked ? "disabled" : ""} />
                   </div>
                 </div>
@@ -259,7 +260,7 @@ export async function show() {
               <tbody>
                 ${productsWithMonthlyArrivals.map((p) => `
                   <tr>
-                    <td>${p.name}</td>
+                    <td>${escapeHtml(p.name)}</td>
                     <td class="num">${monthlyProductTotals[p.key].toLocaleString()}</td>
                   </tr>`).join("")}
                 <tr class="ar-sum-total">

@@ -12,6 +12,7 @@ import { formatYm } from "../dateUtils.js";
 import { triggerBackupDownload, tryAutoBackup, getBackupFolderInfo, saveBackupToFolder } from "./backup.js";
 import { helpBtn } from "../help.js";
 import { openDiscrepancyModal } from "../discrepancyModal.js";
+import { escapeHtml } from "../escape.js";
 
 let app = null;
 let showPages = false;   // 保存済みページ一覧の開閉
@@ -37,7 +38,7 @@ function openBackupPromptModal(ym, folderInfo, onSave) {
         </p>
         ${hasFolder ? `
           <div style="margin: 10px 0 14px 0; padding: 10px 14px; background: var(--bg-card, #f8f9fa); border-radius: 6px; border: 1px solid var(--border, #ddd); font-size: 13px; text-align: left;">
-            📁 <b>指定保存先:</b> ${folderInfo.name}
+            📁 <b>指定保存先:</b> ${escapeHtml(folderInfo.name)}
           </div>
         ` : ""}
         <div class="backup-modal-actions" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">
@@ -199,7 +200,7 @@ function stocktakeRows(products, ledger, month) {
          </div>`;
     return `
       <tr>
-        <td><a href="javascript:void 0" class="lg-detail" data-key="${p.key}">${p.name}</a></td>
+        <td><a href="javascript:void 0" class="lg-detail" data-key="${escapeHtml(p.key)}">${escapeHtml(p.name)}</a></td>
         <td class="num">${toInt(co[p.key])}</td>
         <td class="num">${sum("arrival")}</td>
         <td class="num">${sum("exchange")}</td>
@@ -207,7 +208,7 @@ function stocktakeRows(products, ledger, month) {
         <td class="num">${isNote(p) ? sum("debit") : "－"}</td>
         <td class="num">${isNote(p) ? sum("point") : "－"}</td>
         <td class="num"><b>${book}</b></td>
-        <td><input type="number" inputmode="numeric" min="0" data-phys="${p.key}"
+        <td><input type="number" inputmode="numeric" min="0" data-phys="${escapeHtml(p.key)}"
              value="${month.physicalCount ? toInt(phys[p.key]) : ""}" placeholder="実棚" ${isLocked ? "disabled" : ""} /></td>
         <td class="num">${diffHtml}</td>
       </tr>`;
@@ -223,7 +224,7 @@ function detailTable(products, ledger) {
     r.arrival || r.exchange || r.cash || r.debit || r.point);
   return `
     <div class="panel">
-      <h3>日別台帳: ${p.name}</h3>
+      <h3>日別台帳: ${escapeHtml(p.name)}</h3>
       <table class="result-table narrow">
         <thead><tr><th>日</th><th>入荷</th><th>シール交換</th>${isNote ? "<th>現金</th><th>口座</th><th>ポイント</th>" : ""}<th>残</th></tr></thead>
         <tbody>
@@ -311,14 +312,14 @@ function reorderPanel(month, products, ledger, avgInfo) {
           <tbody>
             ${toOrder.map((r) => `
               <tr>
-                <td>${r.name}</td>
+                <td>${escapeHtml(r.name)}</td>
                 <td class="num">${r.stock}</td>
                 <td class="num">${fmtAvg(r.avg)}</td>
                 <td class="num"><b class="warn">${r.order}</b></td>
               </tr>`).join("")}
           </tbody>
         </table>` : `<p class="view-sub ok">全商品、${STOCK_MONTHS}か月分以上の在庫があります。今月の発注推奨はありません。</p>`}
-      ${noHistory.length ? `<p class="view-sub muted">※ 過去の払出実績がないため計算対象外: ${noHistory.map((r) => r.name).join("、")}</p>` : ""}
+      ${noHistory.length ? `<p class="view-sub muted">※ 過去の払出実績がないため計算対象外: ${noHistory.map((r) => escapeHtml(r.name)).join("、")}</p>` : ""}
     </div>`;
 }
 
@@ -339,11 +340,11 @@ function pagesPanel(month, products) {
       <tbody>
         ${sorted.length ? sorted.map((p) => `
           <tr>
-            <td>${p.name}</td>
+            <td>${escapeHtml(p.name)}</td>
             <td>${toInt(p.predictions.date_1) * 10 + toInt(p.predictions.date_0)}日</td>
             <td class="num">${computeTotalScore(p.predictions, products)}点</td>
             <td>${(p.savedAt || "").slice(0, 16).replace("T", " ")}</td>
-            <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-delpage="${p.name.replace(/"/g, "&quot;")}">削除</button>`}</td>
+            <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-delpage="${escapeHtml(p.name)}">削除</button>`}</td>
           </tr>`).join("") : `<tr><td colspan="5">保存済みページはありません。</td></tr>`}
       </tbody>
     </table>`;

@@ -7,6 +7,7 @@ import { bindGridNav } from "../keynav.js";
 import { toast } from "../toast.js";
 import { formatYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
+import { escapeHtml } from "../escape.js";
 
 let app = null;
 let lastDay = null;    // 追加後も日付・種別の選択を保持する
@@ -144,8 +145,8 @@ export async function show() {
         </div>
         <div class="sp-notes">
           ${notes.map((p) => `
-            <label class="sp-note">${p.name}
-              <input type="number" inputmode="numeric" min="0" data-key="${p.key}" placeholder="0" ${isLocked ? "disabled" : ""} />
+            <label class="sp-note">${escapeHtml(p.name)}
+              <input type="number" inputmode="numeric" min="0" data-key="${escapeHtml(p.key)}" placeholder="0" ${isLocked ? "disabled" : ""} />
             </label>`).join("")}
         </div>
         <div class="sp-add-wrap"><button id="spAdd" class="btn" ${isLocked ? "disabled" : ""}>追加</button></div>
@@ -159,8 +160,8 @@ export async function show() {
           ${items.length ? items.map((s) => `
             <tr>
               <td>${s.day}日</td>
-              <td>${methodName(s.method)}</td>
-              <td>${qtyText(s)}</td>
+              <td>${escapeHtml(methodName(s.method))}</td>
+              <td>${escapeHtml(qtyText(s))}</td>
               <td>${isLocked ? '<span class="muted">保護中</span>' : `<button class="btn-sub" data-del="${s.id}">削除</button>`}</td>
             </tr>`).join("") : `<tr><td colspan="4">まだ記録がありません。</td></tr>`}
         </tbody>

@@ -6,6 +6,7 @@ import { buildMonthlyCsvs } from "../ledger.js";
 import { formatYm } from "../dateUtils.js";
 import { helpBtn } from "../help.js";
 import { toast } from "../toast.js";
+import { escapeHtml } from "../escape.js";
 
 let app = null;
 const el = () => document.getElementById("view-backup");
@@ -538,7 +539,7 @@ export async function show() {
             <div>
               <strong>保存先フォルダ:</strong>
               <span id="bkFolderName" style="margin-left:8px; font-weight:bold; color: ${folderInfo.name ? "var(--color-primary, #1976d2)" : "var(--muted, #888)"};">
-                ${folderInfo.name ? folderInfo.name : "未設定（手動ダウンロードのみ）"}
+                ${folderInfo.name ? escapeHtml(folderInfo.name) : "未設定（手動ダウンロードのみ）"}
               </span>
             </div>
           </div>
@@ -570,13 +571,13 @@ export async function show() {
                     ${backupFiles.map((f, i) => `
                       <tr style="${i === 0 ? "background:#f0fdf4;" : ""}">
                         <td style="padding:6px 10px;">
-                          <b>${f.name}</b>
+                          <b>${escapeHtml(f.name)}</b>
                           ${i === 0 ? '<span style="margin-left:6px; background:#dcfce7; color:#166534; font-size:0.72rem; padding:1px 6px; border-radius:4px; font-weight:bold;">最新</span>' : ""}
                         </td>
                         <td style="padding:6px 10px;">${new Date(f.lastModified).toLocaleString("ja-JP")}</td>
                         <td style="padding:6px 10px;">${(f.size / 1024).toFixed(1)} KB</td>
                         <td style="padding:6px 10px; text-align:center;">
-                          <button class="btn-sub" data-import-shared="${f.name}" style="padding:2px 8px; font-size:0.78rem;">読込</button>
+                          <button class="btn-sub" data-import-shared="${escapeHtml(f.name)}" style="padding:2px 8px; font-size:0.78rem;">読込</button>
                         </td>
                       </tr>
                     `).join("")}

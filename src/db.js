@@ -178,9 +178,31 @@ export async function exportAll() {
 
 // data: exportAll() の出力。既存データはすべて置き換える。
 export async function importAll(data) {
-  if (!data || data.app !== "tsukijime" || !Array.isArray(data.months) || !Array.isArray(data.masters)) {
+  if (!data || typeof data !== "object" || data.app !== "tsukijime" || !Array.isArray(data.months) || !Array.isArray(data.masters)) {
     throw new Error("バックアップファイルの形式が正しくありません。");
   }
+
+  // 異常な大量データ（DoS攻撃・ストレージ枯渇）の防止
+  if (data.months.length > 500 || data.masters.length > 200 || (data.settings && data.settings.length > 100)) {
+    throw new Error("データ件数が上限を超えています。ファイルが破損または改ざんされている可能性があります。");
+  }
+
+  // 各レコードの構造バリデーション
+  for (const m of data.months) {
+    if (!m || typeof m !== "object" || typeof m.ym !== "string" || !/^\d{6}$/.test(m.ym)) {
+      throw new Error(`不正な月レコード（ym: ${m && m.ym}）が含まれています。`);
+    }
+    if (m.pages && !Array.isArray(m.pages)) {
+      throw new Error(`月レコード（${m.ym}）のpages形式が不正です。`);
+    }
+  }
+
+  for (const m of data.masters) {
+    if (!m || typeof m !== "object" || typeof m.version !== "number" || !Array.isArray(m.products)) {
+      throw new Error("商品マスタレコードの構造が不正です。");
+    }
+  }
+
   const db = await openDb();
   // 端末固有のバックアップフォルダ設定を退避して保持
   const currentBackupHandle = await getSetting("backupDirHandle");
@@ -192,7 +214,7 @@ export async function importAll(data) {
     for (const m of data.months) t.objectStore("months").put(m);
     for (const m of data.masters) t.objectStore("masters").put(m);
     for (const s of data.settings || []) {
-      if (s && s.key !== "backupDirHandle") {
+      if (s && typeof s.key === "string" && s.key !== "backupDirHandle") {
         t.objectStore("settings").put(s);
       }
     }

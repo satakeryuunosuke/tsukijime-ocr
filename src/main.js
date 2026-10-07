@@ -7,6 +7,7 @@ import { getAllMasters, putMaster } from "./db.js";
 import { formatYm, parseYm, ymShift, defaultYmByRule } from "./dateUtils.js";
 import { initGlobalHelpListener, initHelpShortcuts } from "./help.js";
 import { initErrorLogger, copyAiReportToClipboard, openAiReportModal } from "./aiReport.js";
+import { escapeHtml } from "./escape.js";
 import * as home from "./views/home.js";
 import * as reader from "./views/reader.js";
 import * as carryover from "./views/carryover.js";
@@ -65,7 +66,7 @@ async function showView(rawName) {
     }
   } catch (e) {
     console.error(`画面 ${name} の表示エラー:`, e);
-    $(`view-${name}`).innerHTML = `<p class="err">画面の表示に失敗しました: ${e.message}</p>`;
+    $(`view-${name}`).innerHTML = `<p class="err">画面の表示に失敗しました: ${escapeHtml(e.message)}</p>`;
   }
 }
 
