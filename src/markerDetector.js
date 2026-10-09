@@ -128,57 +128,154 @@ export function detectMarkerCandidates(srcMat, params = MARKER_PARAMS) {
   return { centers, hulls, metrics };
 }
 
-// 自動検出：候補がちょうど4つ かつ 長方形配置のとき [左上,右上,右下,左下] を返す。失敗時 null。
+// スキャナー取り込み前提の幾何制約
+export const SCANNER_CONSTRAINTS = {
+  max_skew_deg: 7.0,          // 各辺の水平・垂直からの最大許容傾き（度）
+  min_coverage_w: 0.60,       // 画像幅に対するマーカー間幅の最小比率（用紙の端近くに配置）
+  min_coverage_h: 0.55,       // 画像高さに対するマーカー間高さの最小比率
+  min_aspect_ratio: 1.15,     // A5横帳票（~1.414）のアスペクト比下限
+  max_aspect_ratio: 1.75,     // アスペクト比上限
+  corner_margin_x: 0.30,      // TL/BL は 0..margin_x, TR/BR は 1-margin_x..1
+  corner_margin_y: 0.35,      // TL/TR は 0..margin_y, BL/BR は 1-margin_y..1
+  corner_tol_angle: 8.0,      // 4内角の 90度からの許容差（度）
+  min_symmetry: 0.88,         // 対辺の長さ比率 (min / max)
+};
+
+// スキャナー前提の四隅マーカー幾何妥当性を総合チェックする
+// ordered: [左上, 右上, 右下, 左下]
+// 返り値: { ok: boolean, reason?: string, message?: string, metrics?: object }
+export function validateScannerMarkers(ordered, imgW = 0, imgH = 0, constraints = SCANNER_CONSTRAINTS) {
+  if (!ordered || ordered.length !== 4) {
+    return { ok: false, reason: "count", message: "マーカーが4点ありません。" };
+  }
+  const uniq = new Set(ordered.map((p) => p[0] + "," + p[1]));
+  if (uniq.size !== 4) {
+    return { ok: false, reason: "duplicate", message: "重複した点が含まれています。" };
+  }
+
+  // 1. 各内角（90 ± tol 度）
+  const angle = (p1, p2, p3) => {
+    const v1 = [p1[0] - p2[0], p1[1] - p2[1]];
+    const v2 = [p3[0] - p2[0], p3[1] - p2[1]];
+    const n1 = Math.hypot(v1[0], v1[1]);
+    const n2 = Math.hypot(v2[0], v2[1]);
+    if (n1 === 0 || n2 === 0) return 0;
+    let dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2);
+    dot = Math.max(-1, Math.min(1, dot));
+    return (Math.acos(dot) * 180) / Math.PI;
+  };
+  const angles = [
+    angle(ordered[3], ordered[0], ordered[1]),
+    angle(ordered[0], ordered[1], ordered[2]),
+    angle(ordered[1], ordered[2], ordered[3]),
+    angle(ordered[2], ordered[3], ordered[0]),
+  ];
+  const tolAngle = constraints.corner_tol_angle ?? 8.0;
+  if (!angles.every((a) => Math.abs(a - 90.0) <= tolAngle)) {
+    return { ok: false, reason: "angle", message: `内角が直角から外れています（最大ズレ: ${Math.max(...angles.map((a) => Math.abs(a - 90))).toFixed(1)}°）。` };
+  }
+
+  // 2. 対辺の長さと対称性
+  const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const top = len(ordered[0], ordered[1]);
+  const bottom = len(ordered[3], ordered[2]);
+  const left = len(ordered[0], ordered[3]);
+  const right = len(ordered[1], ordered[2]);
+
+  const symTB = Math.min(top, bottom) / Math.max(top, bottom || 1);
+  const symLR = Math.min(left, right) / Math.max(left, right || 1);
+  const minSym = constraints.min_symmetry ?? 0.88;
+  if (symTB < minSym || symLR < minSym) {
+    return { ok: false, reason: "symmetry", message: "対辺の長さが不揃いです（歪み過大）。" };
+  }
+
+  // 3. スキュー角（水平・垂直からの傾き）
+  // スキャナー取り込みのため、原稿はほぼ水平・垂直
+  const skewTop = Math.abs(Math.atan2(ordered[1][1] - ordered[0][1], ordered[1][0] - ordered[0][0]) * 180 / Math.PI);
+  const skewBottom = Math.abs(Math.atan2(ordered[2][1] - ordered[3][1], ordered[2][0] - ordered[3][0]) * 180 / Math.PI);
+  const skewLeft = Math.abs(Math.atan2(ordered[3][0] - ordered[0][0], ordered[3][1] - ordered[0][1]) * 180 / Math.PI);
+  const skewRight = Math.abs(Math.atan2(ordered[2][0] - ordered[1][0], ordered[2][1] - ordered[1][1]) * 180 / Math.PI);
+  const maxSkew = Math.max(skewTop, skewBottom, skewLeft, skewRight);
+  const limitSkew = constraints.max_skew_deg ?? 7.0;
+  if (maxSkew > limitSkew) {
+    return { ok: false, reason: "skew", message: `原稿の傾きが許容値を超えています（${maxSkew.toFixed(1)}° > ${limitSkew}°）。` };
+  }
+
+  // 4. アスペクト比（A5横: 約1.414）
+  const w = (top + bottom) / 2;
+  const h = (left + right) / 2;
+  const aspectRatio = h > 0 ? w / h : 0;
+  const minAspect = constraints.min_aspect_ratio ?? 1.15;
+  const maxAspect = constraints.max_aspect_ratio ?? 1.75;
+  if (aspectRatio < minAspect || aspectRatio > maxAspect) {
+    return { ok: false, reason: "aspect_ratio", message: `アスペクト比がA5横帳票の基準外です（${aspectRatio.toFixed(2)}）。` };
+  }
+
+  // 5. 画像サイズ基準のチェック（占有率・四隅配置ゾーン）
+  let coverageW = 0, coverageH = 0;
+  if (imgW > 0 && imgH > 0) {
+    coverageW = w / imgW;
+    coverageH = h / imgH;
+    const minCovW = constraints.min_coverage_w ?? 0.60;
+    const minCovH = constraints.min_coverage_h ?? 0.55;
+    if (coverageW < minCovW || coverageH < minCovH) {
+      return { ok: false, reason: "coverage", message: `マーカー領域が画像全体に対して小さすぎます（幅${Math.round(coverageW * 100)}%, 高${Math.round(coverageH * 100)}%）。` };
+    }
+
+    // 四隅象限配置チェック: 表内のセルなど中央寄りの候補を確実に排除
+    const mx = constraints.corner_margin_x ?? 0.30;
+    const my = constraints.corner_margin_y ?? 0.35;
+    const [tl, tr, br, bl] = ordered;
+    if (tl[0] > imgW * mx || tl[1] > imgH * my) {
+      return { ok: false, reason: "quadrant", message: "左上マーカーが左上四隅エリアから外れています。" };
+    }
+    if (tr[0] < imgW * (1 - mx) || tr[1] > imgH * my) {
+      return { ok: false, reason: "quadrant", message: "右上マーカーが右上四隅エリアから外れています。" };
+    }
+    if (br[0] < imgW * (1 - mx) || br[1] < imgH * (1 - my)) {
+      return { ok: false, reason: "quadrant", message: "右下マーカーが右下四隅エリアから外れています。" };
+    }
+    if (bl[0] > imgW * mx || bl[1] < imgH * (1 - my)) {
+      return { ok: false, reason: "quadrant", message: "左下マーカーが左下四隅エリアから外れています。" };
+    }
+  }
+
+  return {
+    ok: true,
+    reason: null,
+    message: "スキャナー幾何チェック合格",
+    metrics: { top, bottom, left, right, w, h, aspectRatio, maxSkew, coverageW, coverageH, angles, symTB, symLR },
+  };
+}
+
+// 自動検出：候補がちょうど4つ かつ スキャナー幾何条件を満たすとき [左上,右上,右下,左下] を返す。失敗時 null。
 export function detectMarkers(srcMat, params = MARKER_PARAMS) {
   const { centers } = detectMarkerCandidates(srcMat, params);
   if (centers.length !== 4) return null;
   const ordered = orderPoints(centers);
-  if (!isRectangle(ordered)) return null;
+  const validation = validateScannerMarkers(ordered, srcMat.cols, srcMat.rows);
+  if (!validation.ok) return null;
   return ordered;
 }
 
 // ---- 自動パラメータ探索（既定値で失敗したときのフォールバック）----
 // 典型例: 既定値では文字などを含む5個以上が検出される → 充填率(solidity)や最小面積を
 // 引き上げると本物のマーカー4個に絞り込める。ユーザーが手動でやっていた操作を自動化する。
-//
-// 手順（見つかった時点で終了）:
-//  1. 二値化パラメータ（block_size / c_value / closing_iter）のバリエーションごとに
-//     緩い条件で候補を一括検出し、min_area × solidity を厳しい順にスイープ。
-//     「ちょうど4個 かつ 長方形配置」になった組を採用。
-//  2. それでも4個に絞れない場合は、候補から4点の組合せを総当たりし、
-//     マーカーらしい長方形（isMarkerRectangle）になる組を選ぶ。
 
 const SOLIDITY_STEPS = [0.96, 0.94, 0.92, 0.9, 0.88, 0.86, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6];
 const MIN_AREA_STEPS = [1500, 1000, 700, 500, 300, 150];
 
-// マーカー4点として妥当な長方形か。
-//  - 4内角が 90±tol 度（長方形配置）
-//  - 対辺の長さがほぼ等しい（歪んだ四角形を排除）
-//  - 用紙の四隅に置かれたマーカーなので、画像に対して十分大きい
-// ordered: orderPoints 済みの [左上,右上,右下,左下]。imgW/imgH 省略時はサイズ条件をスキップ。
-export function isMarkerRectangle(ordered, imgW = 0, imgH = 0, tol = 12.0) {
-  const uniq = new Set(ordered.map((p) => p[0] + "," + p[1]));
-  if (uniq.size !== 4) return false;
-  if (!isRectangle(ordered, tol)) return false;
-  const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  const top = len(ordered[0], ordered[1]);
-  const bottom = len(ordered[3], ordered[2]);
-  const left = len(ordered[0], ordered[3]);
-  const right = len(ordered[1], ordered[2]);
-  if (Math.min(top, bottom) / Math.max(top, bottom) < 0.85) return false;
-  if (Math.min(left, right) / Math.max(left, right) < 0.85) return false;
-  if (imgW && imgH) {
-    const w = (top + bottom) / 2;
-    const h = (left + right) / 2;
-    if (w < imgW * 0.4 || h < imgH * 0.3) return false;
-  }
-  return true;
+// マーカー4点として妥当な長方形か（validateScannerMarkers のラッパー）。
+export function isMarkerRectangle(ordered, imgW = 0, imgH = 0, tol = 8.0) {
+  const custom = { ...SCANNER_CONSTRAINTS, corner_tol_angle: tol };
+  const res = validateScannerMarkers(ordered, imgW, imgH, custom);
+  return res.ok;
 }
 
-// 候補（metrics）から4点の組合せを総当たりし、マーカーらしい長方形になる組を返す。
-// 複数見つかった場合は「面積の大きい長方形・マーカー同士の大きさが揃っている」ものを優先。
+// 候補（metrics）から4点の組合せを総当たりし、スキャナー条件を満たす組を返す。
+// 複数見つかった場合は「面積の大きい長方形・傾きが小さい・マーカー同士の大きさが揃っている」ものを優先。
 function pickMarkerSubset(cands, imgW, imgH) {
-  if (cands.length < 4 || cands.length > 14) return null; // 多すぎるとノイズ画像なので諦める
+  if (cands.length < 4 || cands.length > 16) return null; // 多すぎるとノイズ画像なので諦める
   let best = null;
   const n = cands.length;
   for (let a = 0; a < n - 3; a++)
@@ -187,11 +284,14 @@ function pickMarkerSubset(cands, imgW, imgH) {
         for (let d = c + 1; d < n; d++) {
           const four = [cands[a], cands[b], cands[c], cands[d]];
           const areas = four.map((m) => m.area);
-          if (Math.max(...areas) > Math.min(...areas) * 3) continue; // マーカーはほぼ同じ大きさ
+          if (Math.max(...areas) > Math.min(...areas) * 2.2) continue; // マーカーはほぼ同じ大きさ
           const ordered = orderPoints(four.map((m) => m.center));
-          if (!isMarkerRectangle(ordered, imgW, imgH)) continue;
-          const len = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
-          const score = len(ordered[0], ordered[1]) * len(ordered[0], ordered[3]);
+          const val = validateScannerMarkers(ordered, imgW, imgH);
+          if (!val.ok) continue;
+          // スコア: 面積（カバレッジ）重視、傾きペナルティ
+          const areaScore = (val.metrics.w * val.metrics.h);
+          const skewPenalty = 1.0 - (val.metrics.maxSkew / 10.0);
+          const score = areaScore * Math.max(0.1, skewPenalty);
           if (!best || score > best.score) best = { score, ordered };
         }
   return best ? best.ordered : null;

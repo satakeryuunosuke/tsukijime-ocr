@@ -1,7 +1,7 @@
 // 訂正・検算・手動フォールバックのモーダルUI。
 // - マーカー検出成功ページ: 台形補正画像＋認識値を表示し、個数/日付/合計欄を編集。検算をライブ表示。
 // - マーカー検出失敗ページ: 生画像上で四隅を4点タップ→台形補正→認識→編集へ。
-import { orderPoints, detectMarkers, detectMarkerCandidates, markerThreshold, MARKER_PARAMS } from "./markerDetector.js";
+import { orderPoints, detectMarkers, detectMarkerCandidates, markerThreshold, MARKER_PARAMS, validateScannerMarkers } from "./markerDetector.js";
 import { transformImage } from "./geometry.js";
 import { extractRois, deleteRois } from "./extractor.js";
 import { predictNumbers } from "./predictor.js";
@@ -215,9 +215,23 @@ function paramMode(body, rawCanvas, ctx, onDone) {
     src.delete();
     drawResult(hulls, centers);
     const n = centers.length;
-    countEl.textContent = `検出: ${n} / 4`;
-    countEl.className = "rv-count " + (n === 4 ? "ok" : "err");
-    confirmBtn.disabled = n !== 4;
+    if (n === 4) {
+      const ordered = orderPoints(centers);
+      const val = validateScannerMarkers(ordered, rawCanvas.width, rawCanvas.height);
+      if (val.ok) {
+        countEl.textContent = "検出: 4 / 4（スキャナー配置正常✓）";
+        countEl.className = "rv-count ok";
+        confirmBtn.disabled = false;
+      } else {
+        countEl.textContent = `検出: 4 / 4（⚠️ ${val.message}）`;
+        countEl.className = "rv-count err";
+        confirmBtn.disabled = true;
+      }
+    } else {
+      countEl.textContent = `検出: ${n} / 4`;
+      countEl.className = "rv-count err";
+      confirmBtn.disabled = true;
+    }
   }
 
   body.querySelector(".rv-manual").onclick = () => cornerMode(body, rawCanvas, ctx, onDone);
@@ -226,7 +240,7 @@ function paramMode(body, rawCanvas, ctx, onDone) {
     const coords = detectMarkers(src, params());
     src.delete();
     if (!coords) {
-      countEl.textContent = "4点見つかりましたが長方形配置ではありません。位置を見直すか手動タップへ。";
+      countEl.textContent = "スキャナー配置条件を満たしていません。スライダーを見直すか手動タップへ。";
       countEl.className = "rv-count err";
       return;
     }
@@ -280,13 +294,36 @@ function cornerMode(body, rawCanvas, ctx, onDone) {
     const x = (e.clientX - rect.left) / rect.width * rawCanvas.width;
     const y = (e.clientY - rect.top) / rect.height * rawCanvas.height;
     pts.push([Math.round(x), Math.round(y)]);
-    body.querySelector(".rv-corner-status").textContent = `タップ: ${pts.length} / 4`;
-    body.querySelector(".rv-run").disabled = pts.length !== 4;
+
+    const statusEl = body.querySelector(".rv-corner-status");
+    const runBtn = body.querySelector(".rv-run");
+    if (pts.length === 4) {
+      const ordered = orderPoints(pts.map((p) => [p[0], p[1]]));
+      const val = validateScannerMarkers(ordered, rawCanvas.width, rawCanvas.height, {
+        corner_tol_angle: 12.0,
+        max_skew_deg: 9.0,
+        min_symmetry: 0.85,
+      });
+      if (val.ok) {
+        statusEl.textContent = "タップ: 4 / 4（スキャナー配置正常✓）";
+        statusEl.style.color = "#059669";
+      } else {
+        statusEl.textContent = `タップ: 4 / 4（⚠️ ${val.message}）`;
+        statusEl.style.color = "#d97706";
+      }
+      runBtn.disabled = false;
+    } else {
+      statusEl.textContent = `タップ: ${pts.length} / 4`;
+      statusEl.style.color = "";
+      runBtn.disabled = true;
+    }
     draw();
   });
   body.querySelector(".rv-reset").onclick = () => {
     pts.length = 0;
-    body.querySelector(".rv-corner-status").textContent = "タップ: 0 / 4";
+    const statusEl = body.querySelector(".rv-corner-status");
+    statusEl.textContent = "タップ: 0 / 4";
+    statusEl.style.color = "";
     body.querySelector(".rv-run").disabled = true;
     draw();
   };

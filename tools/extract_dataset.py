@@ -87,27 +87,80 @@ def is_rectangle(pts, tol=15.0):
     ]
     return all(abs(a - 90.0) <= tol for a in angles)
 
-def is_marker_rectangle(ordered, img_w=0, img_h=0, tol=12.0):
-    if len(set(f"{p[0]},{p[1]}" for p in ordered)) != 4:
-        return False
-    if not is_rectangle(ordered, tol):
-        return False
+SCANNER_CONSTRAINTS = {
+    "max_skew_deg": 7.0,
+    "min_coverage_w": 0.60,
+    "min_coverage_h": 0.55,
+    "min_aspect_ratio": 1.15,
+    "max_aspect_ratio": 1.75,
+    "corner_margin_x": 0.30,
+    "corner_margin_y": 0.35,
+    "corner_tol_angle": 8.0,
+    "min_symmetry": 0.88,
+}
+
+def validate_scanner_markers(ordered, img_w=0, img_h=0, constraints=None):
+    if constraints is None:
+        constraints = SCANNER_CONSTRAINTS
+    if len(ordered) != 4 or len(set(f"{p[0]},{p[1]}" for p in ordered)) != 4:
+        return False, "count_or_dup"
+    if not is_rectangle(ordered, tol=constraints.get("corner_tol_angle", 8.0)):
+        return False, "angle"
+
     def dist(a, b):
         return math.hypot(a[0] - b[0], a[1] - b[1])
+
     top = dist(ordered[0], ordered[1])
     bottom = dist(ordered[3], ordered[2])
     left = dist(ordered[0], ordered[3])
     right = dist(ordered[1], ordered[2])
-    if min(top, bottom) / max(top, bottom) < 0.85:
-        return False
-    if min(left, right) / max(left, right) < 0.85:
-        return False
+
+    min_sym = constraints.get("min_symmetry", 0.88)
+    if min(top, bottom) / max(top, bottom, 1e-6) < min_sym:
+        return False, "symmetry"
+    if min(left, right) / max(left, right, 1e-6) < min_sym:
+        return False, "symmetry"
+
+    # スキュー角（傾き）
+    skew_top = abs(math.degrees(math.atan2(ordered[1][1] - ordered[0][1], ordered[1][0] - ordered[0][0])))
+    skew_bottom = abs(math.degrees(math.atan2(ordered[2][1] - ordered[3][1], ordered[2][0] - ordered[3][0])))
+    skew_left = abs(math.degrees(math.atan2(ordered[3][0] - ordered[0][0], ordered[3][1] - ordered[0][1])))
+    skew_right = abs(math.degrees(math.atan2(ordered[2][0] - ordered[1][0], ordered[2][1] - ordered[1][1])))
+    max_skew = max(skew_top, skew_bottom, skew_left, skew_right)
+    if max_skew > constraints.get("max_skew_deg", 7.0):
+        return False, "skew"
+
+    # アスペクト比（A5横）
+    w = (top + bottom) / 2.0
+    h = (left + right) / 2.0
+    aspect_ratio = w / h if h > 0 else 0
+    if not (constraints.get("min_aspect_ratio", 1.15) <= aspect_ratio <= constraints.get("max_aspect_ratio", 1.75)):
+        return False, "aspect_ratio"
+
     if img_w > 0 and img_h > 0:
-        w = (top + bottom) / 2
-        h = (left + right) / 2
-        if w < img_w * 0.4 or h < img_h * 0.3:
-            return False
-    return True
+        cov_w = w / float(img_w)
+        cov_h = h / float(img_h)
+        if cov_w < constraints.get("min_coverage_w", 0.60) or cov_h < constraints.get("min_coverage_h", 0.55):
+            return False, "coverage"
+
+        mx = constraints.get("corner_margin_x", 0.30)
+        my = constraints.get("corner_margin_y", 0.35)
+        tl, tr, br, bl = ordered
+        if tl[0] > img_w * mx or tl[1] > img_h * my:
+            return False, "quadrant"
+        if tr[0] < img_w * (1.0 - mx) or tr[1] > img_h * my:
+            return False, "quadrant"
+        if br[0] < img_w * (1.0 - mx) or br[1] < img_h * (1.0 - my):
+            return False, "quadrant"
+        if bl[0] > img_w * mx or bl[1] < img_h * (1.0 - my):
+            return False, "quadrant"
+
+    return True, "ok"
+
+def is_marker_rectangle(ordered, img_w=0, img_h=0, tol=8.0):
+    c = {**SCANNER_CONSTRAINTS, "corner_tol_angle": tol}
+    ok, _ = validate_scanner_markers(ordered, img_w, img_h, constraints=c)
+    return ok
 
 def detect_marker_candidates(gray, block_size=11, c_value=2, closing_iter=2, min_area=300, max_area=15000, solidity_thr=0.85):
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -199,14 +252,22 @@ def auto_detect_markers(img_bgr):
                     for d in range(c + 1, n):
                         four = [pool[a], pool[b], pool[c], pool[d]]
                         areas = [m["area"] for m in four]
-                        if max(areas) > min(areas) * 3:
+                        if max(areas) > min(areas) * 2.2:
                             continue
                         ordered = order_points([m["center"] for m in four])
-                        if not is_marker_rectangle(ordered, img_w, img_h):
+                        ok, _ = validate_scanner_markers(ordered, img_w, img_h)
+                        if not ok:
                             continue
                         w_d = math.hypot(ordered[0][0] - ordered[1][0], ordered[0][1] - ordered[1][1])
-                        h_d = math.hypot(ordered[0][0] - ordered[3][0], ordered[0][0] - ordered[3][1])
-                        score = w_d * h_d
+                        h_d = math.hypot(ordered[0][0] - ordered[3][0], ordered[0][1] - ordered[3][1])
+                        skew = max(
+                            abs(math.degrees(math.atan2(ordered[1][1] - ordered[0][1], ordered[1][0] - ordered[0][0]))),
+                            abs(math.degrees(math.atan2(ordered[2][1] - ordered[3][1], ordered[2][0] - ordered[3][0]))),
+                            abs(math.degrees(math.atan2(ordered[3][0] - ordered[0][0], ordered[3][1] - ordered[0][1]))),
+                            abs(math.degrees(math.atan2(ordered[2][0] - ordered[1][0], ordered[2][1] - ordered[1][1])))
+                        )
+                        skew_penalty = max(0.1, 1.0 - (skew / 10.0))
+                        score = w_d * h_d * skew_penalty
                         if best is None or score > best["score"]:
                             best = {"score": score, "ordered": ordered}
         if best:
